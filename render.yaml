@@ -29,5 +29,6 @@ services:
         value: America/Los_Angeles
       - key: ORG_NAME
         value: Stanford Economics Social Calendar
+        sync: true
       - key: ADMIN_PASSPHRASE
         sync: false          # set this by hand in the dashboard; never commit it
