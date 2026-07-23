@@ -128,30 +128,107 @@ screen, drop IBM Plex `.ttf` files into `server/fonts/`, register them with
 `doc.registerFont`, and change the two font constants at the top of
 `server/pdf.js`.
 
-## Before it goes on a real network
+## Deploying to Render
 
-**Auth is real but minimal.** One shared passphrase, one role. Everyone who can
-edit is the same person as far as the server is concerned, and there's no audit
-trail of who changed what. If you need per-person accounts, replace
-`POST /api/session` with your SSO and add a `created_by` column; the rest of the
-routes already check a session and won't need changing.
+### Build pipeline
 
-**Serve it properly.** Vite's dev server isn't a production server. Run
-`npm run build` and serve `dist/` from nginx or Caddy, and move `server/api.js`
-into a small Express or Fastify app — the handler is plain
-`(req, res, next)` and transfers unchanged. Put TLS in front of it: the
-passphrase and session token cross the wire in the clear otherwise.
+```
+npm ci            # exact versions from package-lock.json
+npm run build     # vite build -> dist/
+```
 
-**Rate-limit the login route.** There's a 250 ms delay on a failed passphrase
-and nothing else. On a public address you want a real limiter on
-`POST /api/session`.
+`dist/` is the client only: fingerprinted JS and CSS plus `index.html`. The
+server is **not** bundled — `server/` and `src/lib/` ship as plain ESM and run
+from source, so don't prune them. `npm ci --omit=dev` would break the build
+(Vite is a devDependency); install everything, build, and let Render keep the
+resulting `node_modules`.
 
-**Draft feed URLs are credentials.** `?token=` in a feed URL includes your
-drafts, and calendar apps store that URL in plain text. Treat it accordingly.
+### Deploy pipeline
 
-**Backups are `cp calendar.db backup.db`** — but use `VACUUM INTO` or stop the
-server first, since WAL mode means the `.db` file alone isn't a complete
-snapshot while it's running.
+```
+npm start   ->   scripts/run.mjs start   ->   node server/index.js
+```
+
+`server/index.js` serves `dist/` and mounts the same `handle` function the Vite
+plugin uses in development. One code path, both environments.
+
+In development, Vite serves the client and the API is a plugin. In production,
+`server/index.js` serves both. The API is identical either way — that was the
+point of keeping `handle` a plain `(req, res, next)`.
+
+### Setting it up
+
+`render.yaml` is in the repo. In Render: **New → Blueprint**, pick the repo,
+then set `ADMIN_PASSPHRASE` in the dashboard when prompted. Or configure a Web
+Service by hand:
+
+| Setting | Value |
+| --- | --- |
+| Runtime | Node |
+| Build command | `npm ci && npm run build` |
+| Start command | `npm start` |
+| Health check path | `/healthz` |
+| Disk | mount at `/var/data`, 1 GB |
+
+| Variable | Required | Does |
+| --- | --- | --- |
+| `ADMIN_PASSPHRASE` | **yes** | claims the calendar at boot. Change it to rotate; that revokes every session |
+| `DATA_DIR` | **yes** | where `calendar.db` lives. Must be the disk mount path |
+| `NODE_VERSION` | yes | 22.5+ for built-in SQLite. Pinned in `.node-version` too |
+| `ORG_NAME` | no | the name in the masthead |
+| `PORT` | no | Render sets this |
+
+### The disk is not optional
+
+Render gives every deploy a fresh filesystem. Without a mounted disk,
+`calendar.db` is recreated from the seed on each deploy and every event you've
+added is gone. The free plan has no disks, so SQLite needs at least Starter.
+
+Two consequences worth knowing before you commit:
+
+- **A service with a disk can only run one instance.** No horizontal scaling.
+  Fine for a calendar; a hard ceiling if this grows into something else.
+- **Deploys are stop-then-start, not zero-downtime.** Render can't run two
+  instances against one disk, so expect a few seconds of 502 on each deploy.
+
+If either is a problem, move to Render Postgres. `server/db.js` is the only
+file that touches storage — the queries are plain SQL and the surface is small.
+
+### Why the server refuses to start without `ADMIN_PASSPHRASE`
+
+The "first visitor claims the calendar" flow is fine on localhost and a land
+grab on a public URL: anyone who finds the address before you sets the
+passphrase and owns it. Setting the variable claims it at boot instead, so
+there's no window. The production server exits with an explanation rather than
+serving an unclaimed calendar.
+
+### Backups
+
+`calendar.db` is a single file, but the app runs SQLite in WAL mode, so a copy
+taken while it's running isn't a complete snapshot. The shutdown path
+checkpoints the WAL on SIGTERM, so a copy taken while stopped is fine. For a
+live backup use `VACUUM INTO`:
+
+```bash
+sqlite3 /var/data/calendar.db "VACUUM INTO '/var/data/backup.db'"
+```
+
+Render's disk snapshots cover you day to day; this is for taking a copy off the
+platform. There's also `GET /feed.ics` with an admin token, which gives you
+every event including drafts in a portable format.
+
+### Still outstanding
+
+- **Rate-limit `POST /api/session`.** There's a 250 ms delay on a failed
+  passphrase and nothing else. On a public address that wants a real limiter.
+- **One shared passphrase, one role**, and no record of who changed what. For
+  per-person accounts, replace `POST /api/session` with your SSO and add a
+  `created_by` column; the other routes already check a session and won't
+  change.
+- **Draft feed URLs are credentials.** `?token=` includes unpublished events,
+  and calendar apps store the URL in plain text.
+
+TLS is handled — Render terminates HTTPS at its edge and redirects HTTP.
 
 ## Odds and ends
 

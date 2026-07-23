@@ -5,9 +5,10 @@
   "type": "module",
   "description": "A shared, organization-wide calendar with tag filtering and calendar-app sync.",
   "scripts": {
-    "dev": "node scripts/run.mjs",
+    "dev": "node scripts/run.mjs dev",
     "build": "node scripts/run.mjs build",
-    "preview": "node scripts/run.mjs preview"
+    "preview": "node scripts/run.mjs preview",
+    "start": "node scripts/run.mjs start"
   },
   "dependencies": {
     "pdfkit": "^0.15.1",

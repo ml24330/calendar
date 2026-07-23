@@ -3,12 +3,29 @@
 
 import { DatabaseSync } from "node:sqlite";
 import path from "node:path";
+import fs from "node:fs";
 import crypto from "node:crypto";
 import { startOfDay } from "../src/lib/dates.js";
+import { hashPassphrase, verifyPassphrase } from "./auth.js";
 
-const DB_FILE = path.resolve(process.cwd(), "calendar.db");
+/* DATA_DIR matters in production: on a PaaS the app directory is wiped on
+   every deploy, so the database has to live on a mounted disk instead. */
+const DATA_DIR = path.resolve(process.env.DATA_DIR || process.cwd());
+const DB_FILE = path.join(DATA_DIR, "calendar.db");
 
 let db;
+
+export const dbPath = () => DB_FILE;
+
+export function close() {
+  if (!db) return;
+  try {
+    // Fold the WAL back into the main file so a `cp` of the .db is complete.
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    db.close();
+  } catch { /* already closed */ }
+  db = undefined;
+}
 
 /* ------------------------------------------------------------------ schema */
 
@@ -58,14 +75,40 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 export function open() {
   if (db) return db;
+  fs.mkdirSync(DATA_DIR, { recursive: true });
   db = new DatabaseSync(DB_FILE);
   db.exec(SCHEMA);
+
   if (!getMeta("orgName")) {
-    setMeta("orgName", "Org Calendar");
+    setMeta("orgName", process.env.ORG_NAME || "Org Calendar");
     seed();
-    console.log("\n  [org-calendar] created calendar.db with sample events\n");
+    console.log(`\n  [org-calendar] created ${DB_FILE} with sample events\n`);
+  } else if (process.env.ORG_NAME && getMeta("orgName") !== process.env.ORG_NAME) {
+    setMeta("orgName", process.env.ORG_NAME);
   }
+
+  applyEnvPassphrase();
   return db;
+}
+
+/* On a public URL the "first visitor claims the calendar" flow is a land
+   grab — anyone who finds the address before you owns it. Setting
+   ADMIN_PASSPHRASE closes that window by claiming it at boot. Changing the
+   variable rotates the passphrase and signs everyone out. */
+function applyEnvPassphrase() {
+  const envPass = process.env.ADMIN_PASSPHRASE;
+  if (!envPass) return;
+  if (envPass.length < 8) {
+    console.error("  [org-calendar] ADMIN_PASSPHRASE must be at least 8 characters. Ignoring it.");
+    return;
+  }
+  const stored = getMeta("adminHash");
+  if (stored && verifyPassphrase(envPass, stored)) return; // unchanged
+  setMeta("adminHash", hashPassphrase(envPass));
+  db.prepare("DELETE FROM sessions").run();
+  console.log(stored
+    ? "  [org-calendar] ADMIN_PASSPHRASE changed — existing sessions revoked"
+    : "  [org-calendar] admin passphrase set from ADMIN_PASSPHRASE");
 }
 
 /* ------------------------------------------------------------------- meta */

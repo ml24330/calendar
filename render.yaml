@@ -1,0 +1,29 @@
+# Render Blueprint. Push this with the repo, then in Render:
+#   New → Blueprint → pick the repo.
+#
+# The disk is the part that matters. Without it, Render gives every deploy a
+# fresh filesystem and calendar.db disappears along with every event.
+services:
+  - type: web
+    name: org-calendar
+    runtime: node
+    plan: starter            # free has no persistent disk; SQLite needs one
+    region: oregon
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    disk:
+      name: calendar-data
+      mountPath: /var/data   # matches DATA_DIR below
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.20.0
+      - key: DATA_DIR
+        value: /var/data
+      - key: ORG_NAME
+        value: Org Calendar
+      - key: ADMIN_PASSPHRASE
+        sync: false          # set this by hand in the dashboard; never commit it
