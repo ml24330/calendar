@@ -12,6 +12,7 @@ import {
   fmtLongDate, periodRange, orderedDays,
 } from "../src/lib/dates.js";
 import { expandDays } from "../src/lib/layout.js";
+import { toZoned, zoneAbbr, CALENDAR_TZ } from "../src/lib/tz.js";
 
 const INK = "#17203A";
 const MUTED = "#737C99";
@@ -56,6 +57,7 @@ function header(doc, { orgName, label, view, tags, includeDrafts, filtered }) {
     view[0].toUpperCase() + view.slice(1) + " view",
     filtered ? "filtered" : "all tags",
     includeDrafts ? "includes drafts" : "published only",
+    "times in " + zoneAbbr(),
     "generated " + new Date().toLocaleDateString(undefined, {
       year: "numeric", month: "short", day: "numeric",
     }),
@@ -144,7 +146,7 @@ function monthGrid(doc, { date, byDay, tagsById, top }) {
         const color = (tagsById[ev.tagId] || {}).color || "#9AA2BC";
         doc.rect(x + 4, ey, 2, lineH - 2).fill(color);
         const prefix = ev.published ? "" : "◦ ";
-        const label = (ev.allDay ? "" : fmtTime(new Date(ev.start)) + " ") + prefix + ev.title;
+        const label = (ev.allDay ? "" : fmtTime(toZoned(ev.start)) + " ") + prefix + ev.title;
         doc.font(SANS).fontSize(6.5).fillColor(ev.published ? INK : DRAFT);
         doc.text(ellipsis(doc, label, colW - 14), x + 9, ey + 0.5, { width: colW - 12, lineBreak: false });
         ey += lineH;
@@ -176,7 +178,7 @@ function weekGrid(doc, { date, byDay, tagsById, top }) {
       const color = (tagsById[ev.tagId] || {}).color || "#9AA2BC";
       doc.rect(x + 4, y, 2.5, 20).fill(color);
       doc.font(SANS).fontSize(6.5).fillColor(MUTED)
-        .text(ev.allDay ? "All day" : fmtTime(new Date(ev.start)), x + 10, y, { width: colW - 14, lineBreak: false });
+        .text(ev.allDay ? "All day" : fmtTime(toZoned(ev.start)), x + 10, y, { width: colW - 14, lineBreak: false });
       doc.font(BOLD).fontSize(7).fillColor(ev.published ? INK : DRAFT);
       const title = (ev.published ? "" : "DRAFT · ") + ev.title;
       doc.text(ellipsis(doc, title, colW - 16), x + 10, y + 8, { width: colW - 14, lineBreak: false });
@@ -260,7 +262,7 @@ function agenda(doc, { events, tagsById, includeDrafts }) {
 
   let lastDay = null;
   for (const ev of events) {
-    const start = new Date(ev.start);
+    const start = toZoned(ev.start);
 
     // Keep a whole entry on one page rather than splitting it across the break.
     if (doc.y > doc.page.height - doc.page.margins.bottom - 74) {

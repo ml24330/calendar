@@ -5,6 +5,7 @@ import {
   fmtLongDate,
 } from "../lib/dates.js";
 import { layoutOverlaps, tint } from "../lib/layout.js";
+import { toZoned, zonedNow } from "../lib/tz.js";
 
 export const HOUR_H = 52; // px per hour
 
@@ -76,7 +77,7 @@ export function YearPlanner({ year, byDay, tagsById, tags, hidden, onPickDay }) 
             <span className="swatch" style={{ background: t.color }} />{t.name}
           </span>
         ))}
-        {new Date().getFullYear() === year && (
+        {zonedNow().getFullYear() === year && (
           <span className="yp-leg" style={{ marginLeft: "auto", color: "var(--signal)" }}>
             Red outline marks today
           </span>
@@ -123,7 +124,7 @@ export function MonthGrid({ cursor, byDay, tagsById, onOpen, onPickDay }) {
                     onClick={() => onOpen(ev)}
                     title={ev.published ? ev.title : `Draft — ${ev.title}`}
                   >
-                    {!ev.allDay && <span className="h">{fmtTime(new Date(ev.start))}</span>}
+                    {!ev.allDay && <span className="h">{fmtTime(toZoned(ev.start))}</span>}
                     <span className="t">{ev.title}</span>
                   </button>
                 );
@@ -216,8 +217,8 @@ export function TimeGrid({ days, byDay, tagsById, onOpen, now, onPickDay }) {
             const items = (byDay.get(key(d)) || [])
               .filter((e) => !e.allDay)
               .map((ev) => {
-                const s = Math.max(new Date(ev.start).getTime(), dayStart);
-                const e = Math.min(new Date(ev.end).getTime(), dayEnd);
+                const s = Math.max(toZoned(ev.start).getTime(), dayStart);
+                const e = Math.min(toZoned(ev.end).getTime(), dayEnd);
                 return { ev, s, e: Math.max(e, s + 15 * 60000) };
               });
             const placed = layoutOverlaps(items);

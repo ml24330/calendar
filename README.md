@@ -230,10 +230,48 @@ every event including drafts in a portable format.
 
 TLS is handled — Render terminates HTTPS at its edge and redirects HTTP.
 
+## Time and timezones
+
+The calendar runs on one clock, set by `CALENDAR_TZ` in `src/lib/tz.js`
+(currently `America/Los_Angeles`). A seminar at noon Pacific reads as noon to
+everyone, whether they're in Palo Alto, London, or on a laptop still set to
+whatever timezone they flew in from, and whether the page is rendered in the
+browser or the PDF is rendered on a server in Virginia.
+
+Storage doesn't change: instants are UTC in SQLite and UTC in the `.ics` feed,
+which is what makes the feed correct when someone subscribes from another
+country — their calendar app converts, as it should. Only the *display* clock
+is pinned.
+
+Why this needed doing: every helper in `dates.js` reads wall-clock values with
+`getHours()` and friends, which report the machine's zone. In the browser
+that's the viewer's laptop; on Render it's UTC. Before this, a noon Pacific
+seminar printed as 7pm in the PDF.
+
+`toZoned()` turns a stored instant into a Date whose local getters read as
+Pacific, so the existing helpers work unchanged. `fromZoned()` inverts it, and
+is what the event form uses to turn what someone typed into a real instant.
+The rule is: convert at the edges, never store a converted Date, and never
+hand one to `toISOString()`.
+
+Run `npm test` to check it. The suite runs the same assertions under eight
+machine timezones, including both DST transitions and Chatham's 45-minute
+offset.
+
+Two cases can't round-trip, and both are properties of civil time rather than
+bugs. When the clocks go back, two instants share one wall time and only one
+can come back. And a wall time that falls in the *viewer's own* spring-forward
+gap can't be held in a `Date` at all, so it reads an hour off — one hour a
+year, only for viewers in a zone whose transition happens to overlap. Fixing
+that last one properly means dropping `Date` for wall clock and rendering from
+parts (`zonedParts` is exported for that), or waiting for `Temporal`.
+
+To move the calendar to another campus, change `CALENDAR_TZ` and run
+`npm test`.
+
 ## Odds and ends
 
 - Times are stored as ISO strings in UTC and written to `.ics` in UTC.
-  Everything displays in the viewer's local time.
 - No recurring events. Adding them means `RRULE` on output and real `VTIMEZONE`
   blocks — UTC stamps stop being enough once a rule crosses a daylight-saving
   boundary.

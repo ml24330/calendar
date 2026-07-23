@@ -3,6 +3,7 @@ import {
   MONTHS, MON_ABBR, DAY_ABBR, addDays, addMonths, startOfDay, startOfWeek, slug,
 } from "./lib/dates.js";
 import { expandDays, readableOn } from "./lib/layout.js";
+import { toZoned, fromZoned, zonedNow, zoneAbbr, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
 import { downloadICS } from "./lib/ics.js";
 import * as api from "./lib/api.js";
 import { YearPlanner, MonthGrid, TimeGrid } from "./components/views.jsx";
@@ -20,13 +21,13 @@ export default function OrgCalendar() {
   const [events, setEvents] = useState([]);
 
   const [view, setView] = useState("month");
-  const [cursor, setCursor] = useState(() => new Date());
+  const [cursor, setCursor] = useState(() => zonedNow());
   const [hidden, setHidden] = useState(() => new Set());
   const [showDrafts, setShowDrafts] = useState(true);
   const [query, setQuery] = useState("");
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => zonedNow());
 
   const dialogRef = useRef(null);
   dialogRef.current = dialog;
@@ -49,7 +50,7 @@ export default function OrgCalendar() {
   }, [refresh]);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60000);
+    const t = setInterval(() => setNow(zonedNow()), 60000);
     return () => clearInterval(t);
   }, []);
 
@@ -147,7 +148,7 @@ export default function OrgCalendar() {
       map.get(k).push(ev);
     }));
     map.forEach((list) => list.sort((a, b) =>
-      a.allDay === b.allDay ? new Date(a.start) - new Date(b.start) : (a.allDay ? -1 : 1)
+      a.allDay === b.allDay ? toZoned(a.start) - toZoned(b.start) : (a.allDay ? -1 : 1)
     ));
     return map;
   }, [visible]);
@@ -181,7 +182,7 @@ export default function OrgCalendar() {
       const k = e.key.toLowerCase();
       if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
       else if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
-      else if (k === "t") setCursor(new Date());
+      else if (k === "t") setCursor(zonedNow());
       else if (["y", "m", "w", "d"].includes(k)) {
         setView({ y: "year", m: "month", w: "week", d: "day" }[k]);
       }
@@ -219,7 +220,7 @@ export default function OrgCalendar() {
       if (!hidden.has("__none")) keep.push("__none");
     }
     window.open(
-      api.pdfUrl({ view, date: cursor, tagIds: keep, query: query.trim() }),
+      api.pdfUrl({ view, date: fromZoned(cursor), tagIds: keep, query: query.trim() }),
       "_blank",
       "noopener"
     );
@@ -245,7 +246,7 @@ export default function OrgCalendar() {
       <header className="masthead">
         <div className="mark">
           <b>{orgName}</b>
-          <span>Shared schedule</span>
+          <span>2026-2027 · all times {zoneAbbr()}</span>
         </div>
         <input
           className="search mono"
@@ -259,7 +260,7 @@ export default function OrgCalendar() {
           onClick={() => (admin ? lock() : setDialog({ kind: "auth" }))}
           disabled={offline}
         >
-          {admin ? "Editing on · lock" : "Unlock editing"}
+          {admin ? "Log out" : "Log in to edit"}
         </button>
       </header>
 
@@ -361,6 +362,13 @@ export default function OrgCalendar() {
               <span className="mono">npm run dev</span>, then reload.
             </div>
           )}
+          {viewerIsElsewhere() && (
+            <div className="banner">
+              Your device is on a different clock. Every time here is shown in{" "}
+              {zoneAbbr()} ({CALENDAR_TZ.split("/")[1].replace("_", " ")}), not your local time.
+              Events you add to your own calendar will convert automatically.
+            </div>
+          )}
           {notice && (
             <div className={"banner" + (notice.kind === "ok" ? " ok" : " bad")}>{notice.text}</div>
           )}
@@ -374,7 +382,7 @@ export default function OrgCalendar() {
           <div className="toolbar">
             <div className="stepper">
               <button onClick={() => step(-1)} aria-label="Previous">‹</button>
-              <button onClick={() => setCursor(new Date())}>Today</button>
+              <button onClick={() => setCursor(zonedNow())}>Today</button>
               <button onClick={() => step(1)} aria-label="Next">›</button>
             </div>
             <h1 className="period">

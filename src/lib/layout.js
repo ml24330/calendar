@@ -1,10 +1,13 @@
 import { startOfDay, addDays, key } from "./dates.js";
+import { toZoned } from "./tz.js";
 
 /** Every calendar day an event touches, as `YYYY-MM-DD` keys. */
 export function expandDays(ev) {
   const out = [];
-  let d = startOfDay(new Date(ev.start));
-  const last = startOfDay(new Date(ev.end));
+  // Which days an event lands on depends on the calendar's clock, not the
+  // viewer's: a 5pm PT event is not "tomorrow" for someone reading in Tokyo.
+  let d = startOfDay(toZoned(ev.start));
+  const last = startOfDay(toZoned(ev.end));
   let guard = 0;
   while (d <= last && guard++ < 400) {
     out.push(key(d));

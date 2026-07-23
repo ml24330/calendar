@@ -23,7 +23,11 @@ services:
         value: 22.20.0
       - key: DATA_DIR
         value: /var/data
+      - key: TZ
+        # The app pins display to CALENDAR_TZ in src/lib/tz.js regardless, but
+        # matching the host clock keeps log timestamps readable.
+        value: America/Los_Angeles
       - key: ORG_NAME
-        value: Org Calendar
+        value: Stanford Economics Social Calendar
       - key: ADMIN_PASSPHRASE
         sync: false          # set this by hand in the dashboard; never commit it

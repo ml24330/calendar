@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { startOfDay, toInput, toDateInput, fmtLongDate, fmtRange, slug } from "../lib/dates.js";
 import { downloadICS, googleUrl } from "../lib/ics.js";
 import { tint } from "../lib/layout.js";
+import { toZoned, fromZoned, zoneAbbr } from "../lib/tz.js";
 
 const TAG_COLORS = [
   "#2F6FE0", "#00857A", "#B4530A", "#7A3EA8",
@@ -74,7 +75,7 @@ export function EventDetail({ ev, tag, admin, onClose, onEdit, onDelete, onToggl
         <dl className="meta">
           <dt>When</dt>
           <dd>
-            {fmtLongDate(new Date(ev.start))}<br />
+            {fmtLongDate(toZoned(ev.start))}<br />
             <span className="mono" style={{ fontSize: 13 }}>{fmtRange(ev)}</span>
           </dd>
           {ev.location && (<><dt>Where</dt><dd>{ev.location}</dd></>)}
@@ -150,8 +151,10 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
 
   const [f, setF] = useState(() => ({
     ...base,
-    startIn: base.allDay ? toDateInput(new Date(base.start)) : toInput(new Date(base.start)),
-    endIn: base.allDay ? toDateInput(new Date(base.end)) : toInput(new Date(base.end)),
+    // The form shows and accepts the calendar's wall clock, whatever the
+    // editor's own laptop is set to.
+    startIn: base.allDay ? toDateInput(toZoned(base.start)) : toInput(toZoned(base.start)),
+    endIn: base.allDay ? toDateInput(toZoned(base.end)) : toInput(toZoned(base.end)),
   }));
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -167,8 +170,10 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
   const submit = async (publish) => {
     if (!f.title.trim()) return setErr("Give the event a title.");
     if (!f.startIn || !f.endIn) return setErr("Set a start and an end.");
-    const s = new Date(f.allDay ? `${f.startIn}T00:00` : f.startIn);
-    const e = new Date(f.allDay ? `${f.endIn}T00:00` : f.endIn);
+    // What was typed is a wall clock in the calendar's zone; convert it to a
+    // real instant before it goes anywhere near the database.
+    const s = fromZoned(new Date(f.allDay ? `${f.startIn}T00:00` : f.startIn));
+    const e = fromZoned(new Date(f.allDay ? `${f.endIn}T00:00` : f.endIn));
     if (isNaN(s) || isNaN(e)) return setErr("That date doesn't parse. Check the start and end.");
     if (e < s) return setErr("The end is before the start.");
     if (f.contactEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(f.contactEmail)) {
@@ -204,7 +209,7 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
         <div className="field">
           <label className="eyebrow" htmlFor="f-title">Title</label>
           <input id="f-title" className="inp" value={f.title} autoFocus
-            onChange={(e) => set("title", e.target.value)} placeholder="Weekly research seminar" />
+            onChange={(e) => set("title", e.target.value)} placeholder="Happy Hour" />
         </div>
 
         <div className="two">
@@ -227,12 +232,12 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
 
         <div className="two">
           <div className="field">
-            <label className="eyebrow" htmlFor="f-start">Starts</label>
+            <label className="eyebrow" htmlFor="f-start">Starts ({zoneAbbr()})</label>
             <input id="f-start" className="inp mono" type={f.allDay ? "date" : "datetime-local"}
               value={f.startIn} onChange={(e) => set("startIn", e.target.value)} />
           </div>
           <div className="field">
-            <label className="eyebrow" htmlFor="f-end">Ends</label>
+            <label className="eyebrow" htmlFor="f-end">Ends ({zoneAbbr()})</label>
             <input id="f-end" className="inp mono" type={f.allDay ? "date" : "datetime-local"}
               value={f.endIn} onChange={(e) => set("endIn", e.target.value)} />
           </div>
@@ -241,19 +246,19 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
         <div className="field">
           <label className="eyebrow" htmlFor="f-loc">Location</label>
           <input id="f-loc" className="inp" value={f.location}
-            onChange={(e) => set("location", e.target.value)} placeholder="Building 4, Room 210" />
+            onChange={(e) => set("location", e.target.value)} placeholder="Landau 007" />
         </div>
 
         <div className="two">
           <div className="field">
             <label className="eyebrow" htmlFor="f-cn">Point of contact</label>
             <input id="f-cn" className="inp" value={f.contactName}
-              onChange={(e) => set("contactName", e.target.value)} placeholder="Priya Raman" />
+              onChange={(e) => set("contactName", e.target.value)} placeholder="John Doe" />
           </div>
           <div className="field">
             <label className="eyebrow" htmlFor="f-ce">Contact email</label>
             <input id="f-ce" className="inp" type="email" value={f.contactEmail}
-              onChange={(e) => set("contactEmail", e.target.value)} placeholder="praman@example.org" />
+              onChange={(e) => set("contactEmail", e.target.value)} placeholder="john.doe@stanford.edu" />
           </div>
         </div>
 
@@ -366,7 +371,7 @@ export function AuthDialog({ claimed, onClose, onSubmit }) {
   return (
     <Scrim onClose={onClose}>
       <div className="dlg-h">
-        <h2>{claimed ? "Unlock editing" : "Set the editing passphrase"}</h2>
+        <h2>{claimed ? "Log in to edit" : "Set the editing passphrase"}</h2>
         <button className="x" onClick={onClose} aria-label="Close">×</button>
       </div>
       <div className="dlg-b">
@@ -442,15 +447,15 @@ export function SubscribeHelp({ tags, admin, onClose }) {
           );
         })}
 
-        {admin && (
+        {/* {admin && (
           <p className="banner" style={{ marginTop: 16 }}>
             Adding <span className="mono">?token=…</span> to a feed URL includes your drafts.
             Anyone holding that URL sees them, and calendar apps store it in plain text — so
             treat it as a password, not a link to paste in chat.
           </p>
-        )}
+        )} */}
 
-        <p className="eyebrow" style={{ marginTop: 18, marginBottom: 6 }}>Apple Calendar</p>
+        {/* <p className="eyebrow" style={{ marginTop: 18, marginBottom: 6 }}>Apple Calendar</p>
         <p className="note" style={{ marginTop: 0 }}>
           File → New Calendar Subscription, paste the URL. It accepts localhost, so this works
           while you're testing.
@@ -461,7 +466,7 @@ export function SubscribeHelp({ tags, admin, onClose }) {
           Other calendars → From URL, or Add calendar → Subscribe from web. Both fetch from
           their own servers, so they need a public address — localhost won't reach them. Use
           the download button while testing, or expose the port with a tunnel.
-        </p>
+        </p> */}
       </div>
       <div className="dlg-f">
         <button className="btn" onClick={onClose}>Close</button>

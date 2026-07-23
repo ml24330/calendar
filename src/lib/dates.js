@@ -1,3 +1,5 @@
+import { toZoned, zonedNow } from "./tz.js";
+
 /* Pure date helpers. Safe to import from Node (no browser globals). */
 
 export const WEEK_START = 0; // 0 = Sunday, 1 = Monday
@@ -19,7 +21,7 @@ export const sameDay = (a, b) =>
   a.getMonth() === b.getMonth() &&
   a.getDate() === b.getDate();
 
-export const isToday = (d) => sameDay(d, new Date());
+export const isToday = (d) => sameDay(d, zonedNow());
 export const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 
 export const MONTHS = ["January", "February", "March", "April", "May", "June",
@@ -38,8 +40,8 @@ export function fmtTime(d) {
 }
 
 export function fmtRange(ev) {
-  const s = new Date(ev.start);
-  const e = new Date(ev.end);
+  const s = toZoned(ev.start);
+  const e = toZoned(ev.end);
   if (ev.allDay) {
     return sameDay(s, e) ? "All day" : `All day · through ${MON_ABBR[e.getMonth()]} ${e.getDate()}`;
   }

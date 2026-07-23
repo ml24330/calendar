@@ -8,7 +8,8 @@
     "dev": "node scripts/run.mjs dev",
     "build": "node scripts/run.mjs build",
     "preview": "node scripts/run.mjs preview",
-    "start": "node scripts/run.mjs start"
+    "start": "node scripts/run.mjs start",
+    "test": "node test/tz.test.mjs"
   },
   "dependencies": {
     "pdfkit": "^0.15.1",
