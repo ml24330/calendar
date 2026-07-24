@@ -46,7 +46,7 @@ export default function OrgCalendar() {
 
   useEffect(() => {
     refresh()
-      .catch((err) => { setOffline(true); setNotice({ kind: "error", text: err.message }); })
+      .catch(() => setOffline(true))
       .finally(() => setReady(true));
   }, [refresh]);
 
@@ -460,8 +460,7 @@ export default function OrgCalendar() {
         <main>
           {offline && (
             <div className="banner">
-              The calendar server isn't responding. Start it with{" "}
-              <span className="mono">npm run dev</span>, then reload.
+              The calendar isn't responding. Try refreshing the page in a moment.
             </div>
           )}
           {viewerIsElsewhere() && (

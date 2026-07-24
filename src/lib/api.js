@@ -16,20 +16,29 @@ const setToken = (t) => {
 
 async function call(path, { method = "GET", body } = {}) {
   const token = getToken();
-  const res = await fetch(path, {
-    method,
-    headers: {
-      ...(body ? { "content-type": "application/json" } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  let res;
+  try {
+    res = await fetch(path, {
+      method,
+      headers: {
+        ...(body ? { "content-type": "application/json" } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+  } catch {
+    // fetch() itself rejects with a bare "TypeError: fetch failed" when the
+    // server can't be reached at all. Wrap it so callers get a message meant
+    // for a person, not the browser's internal string. status 0 = never
+    // reached the server.
+    throw new ApiError("The calendar isn't responding. Try refreshing the page in a moment.", 0);
+  }
 
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("application/json")) {
     // Vite answers unknown paths with index.html and a 200, so an ok status
     // is not proof the API is there. Check the content type.
-    throw new ApiError("The calendar server isn't responding. Is `npm run dev` running?", res.status);
+    throw new ApiError("The calendar isn't responding. Try refreshing the page in a moment.", res.status);
   }
   const data = await res.json();
   if (!res.ok) throw new ApiError(data.error || "Something went wrong.", res.status, data);
