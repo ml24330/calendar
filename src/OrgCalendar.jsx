@@ -54,12 +54,14 @@ export default function OrgCalendar() {
   }, []);
 
   /* Pick up other people's edits. Skipped while a dialog is open, so a
-     background refresh can't yank the form out from under you. */
+     background refresh can't yank the form out from under you.
+     60s rather than 15s: a shared calendar doesn't need second-level
+     freshness, and every poll is a full read of the event table. */
   useEffect(() => {
     if (offline) return;
     const t = setInterval(() => {
       if (!dialogRef.current) refresh().catch(() => setOffline(true));
-    }, 15000);
+    }, 60000);
     return () => clearInterval(t);
   }, [refresh, offline]);
 
