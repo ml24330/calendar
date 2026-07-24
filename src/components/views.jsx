@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   MON_ABBR, DAY_ABBR, DAY_LETTER, orderedDays, daysInMonth, startOfMonth,
   startOfWeek, startOfDay, endOfDay, addDays, key, isToday, fmtTime, fmtRange,
-  fmtLongDate,
+  fmtLongDate, WEEK_START,
 } from "../lib/dates.js";
 import { layoutOverlaps, tint } from "../lib/layout.js";
 import { toZoned, zonedNow } from "../lib/tz.js";
@@ -90,9 +90,17 @@ export function YearPlanner({ year, byDay, tagsById, tags, hidden, onPickDay }) 
 /* ------------------------------------------------------------ month grid */
 
 export function MonthGrid({ cursor, byDay, tagsById, onOpen, onPickDay }) {
-  const first = startOfWeek(startOfMonth(cursor));
-  const cells = Array.from({ length: 42 }, (_, i) => addDays(first, i));
+  const monthStart = startOfMonth(cursor);
+  const first = startOfWeek(monthStart);
   const month = cursor.getMonth();
+
+  /* Only as many weeks as the month actually occupies. A fixed six rows means
+     a February beginning on the first day of the week shows a whole trailing
+     week of March for nothing. Counting from weekdays rather than subtracting
+     timestamps keeps this right across a daylight-saving change. */
+  const lead = (monthStart.getDay() - WEEK_START + 7) % 7;
+  const weeks = Math.ceil((lead + daysInMonth(cursor.getFullYear(), month)) / 7);
+  const cells = Array.from({ length: weeks * 7 }, (_, i) => addDays(first, i));
 
   return (
     <>
