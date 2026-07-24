@@ -1,38 +1,49 @@
-/* SQLite via Node's built-in driver — no native module to compile.
-   The database is a single file, calendar.db, next to package.json. */
+/* Data layer, on libSQL.
 
-import { DatabaseSync } from "node:sqlite";
+   One driver covers both modes, because libSQL speaks SQLite:
+
+     file:./calendar.db        `npm run dev`      — a plain local file
+     libsql://…turso.io        `npm run dev-live-db`, and production
+
+   The SQL below is ordinary SQLite and doesn't change between the two. What
+   does change is that every call is async — a remote database is a network
+   round trip, and pretending otherwise would mean lying about it somewhere.
+*/
+
+import { createClient } from "@libsql/client";
 import path from "node:path";
-import fs from "node:fs";
 import crypto from "node:crypto";
 import { startOfDay } from "../src/lib/dates.js";
 import { hashPassphrase, verifyPassphrase } from "./auth.js";
 
-/* DATA_DIR matters in production: on a PaaS the app directory is wiped on
-   every deploy, so the database has to live on a mounted disk instead. */
-const DATA_DIR = path.resolve(process.env.DATA_DIR || process.cwd());
-const DB_FILE = path.join(DATA_DIR, "calendar.db");
+let client;
+let ready;
+let target;
 
-let db;
-
-export const dbPath = () => DB_FILE;
-
-export function close() {
-  if (!db) return;
-  try {
-    // Fold the WAL back into the main file so a `cp` of the .db is complete.
-    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
-    db.close();
-  } catch { /* already closed */ }
-  db = undefined;
+/** Where the data lives, decided once from the environment. */
+export function resolveTarget() {
+  if (target) return target;
+  const url = process.env.TURSO_DATABASE_URL;
+  if (url) {
+    target = {
+      remote: true,
+      url,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+      label: url.replace(/^libsql:\/\//, "").split("?")[0],
+    };
+  } else {
+    const file = path.join(path.resolve(process.env.DATA_DIR || process.cwd()), "calendar.db");
+    target = { remote: false, url: "file:" + file, label: file, file };
+  }
+  return target;
 }
+
+export const dbPath = () => resolveTarget().label;
+export const isRemote = () => resolveTarget().remote;
 
 /* ------------------------------------------------------------------ schema */
 
 const SCHEMA = `
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
-
 CREATE TABLE IF NOT EXISTS meta (
   key   TEXT PRIMARY KEY,
   value TEXT
@@ -73,86 +84,121 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 `;
 
+/**
+ * Connect, once, whoever asks first.
+ *
+ * There are two entry points — the production server and the Vite plugin —
+ * and only one of them used to call this. Every accessor now goes through it,
+ * so the layer works no matter who reaches it first. `client` is assigned
+ * before the first await, which is what stops connect() deadlocking on its own
+ * in-flight promise when seeding calls back in through run().
+ */
 export function open() {
-  if (db) return db;
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  db = new DatabaseSync(DB_FILE);
-  db.exec(SCHEMA);
-
-  // The calendar's name is a constant in src/config.js, not a stored value,
-  // so "seeded" is what marks a database as initialised.
-  if (!getMeta("seeded")) {
-    setMeta("seeded", new Date().toISOString());
-    seed();
-    console.log(`\n  [org-calendar] created ${DB_FILE} with sample events\n`);
-  }
-
-  applyEnvPassphrase();
-  return db;
+  if (!ready) ready = connect();
+  return ready;
 }
 
-/* On a public URL the "first visitor claims the calendar" flow is a land
-   grab — anyone who finds the address before you owns it. Setting
-   ADMIN_PASSPHRASE closes that window by claiming it at boot. Changing the
-   variable rotates the passphrase and signs everyone out. */
-function applyEnvPassphrase() {
-  const envPass = process.env.ADMIN_PASSPHRASE;
-  if (!envPass) return;
-  if (envPass.length < 8) {
-    console.error("  [org-calendar] ADMIN_PASSPHRASE must be at least 8 characters. Ignoring it.");
-    return;
+async function connect() {
+  const t = resolveTarget();
+  client = createClient({ url: t.url, authToken: t.authToken });
+
+  if (!t.remote) {
+    // Only meaningful for a local file. A remote database manages its own
+    // durability, and these pragmas are rejected or ignored there.
+    await client.execute("PRAGMA journal_mode = WAL");
+    await client.execute("PRAGMA foreign_keys = ON");
   }
-  const stored = getMeta("adminHash");
-  if (stored && verifyPassphrase(envPass, stored)) return; // unchanged
-  setMeta("adminHash", hashPassphrase(envPass));
-  db.prepare("DELETE FROM sessions").run();
-  console.log(stored
-    ? "  [org-calendar] ADMIN_PASSPHRASE changed — existing sessions revoked"
-    : "  [org-calendar] admin passphrase set from ADMIN_PASSPHRASE");
+
+  await client.executeMultiple(SCHEMA);
+
+  if (!(await getMeta("seeded"))) {
+    await setMeta("seeded", new Date().toISOString());
+    await seed();
+    console.log(`\n  [org-calendar] initialised ${t.label} with sample events\n`);
+  }
+
+  await applyEnvPassphrase();
+  return client;
 }
 
-/* ------------------------------------------------------------------- meta */
+/** How long to wait for a first response before saying so. Without this a bad
+    URL or a blocked network just hangs, which reads as "the app is broken". */
+const CONNECT_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS) || 15000;
 
-export function getMeta(key) {
-  const row = open().prepare("SELECT value FROM meta WHERE key = ?").get(key);
+export function openWithTimeout() {
+  return Promise.race([
+    open(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(
+        `No response from ${resolveTarget().label} after ${CONNECT_TIMEOUT_MS / 1000}s`
+      )), CONNECT_TIMEOUT_MS).unref()
+    ),
+  ]);
+}
+
+export async function close() {
+  ready = undefined;
+  if (!client) return;
+  try {
+    if (!resolveTarget().remote) {
+      // Fold the WAL back in so a copy of the .db file is complete.
+      await client.execute("PRAGMA wal_checkpoint(TRUNCATE)");
+    }
+    client.close();
+  } catch { /* already gone */ }
+  client = undefined;
+}
+
+const run = async (sql, args = []) => {
+  if (!client) await open();
+  return client.execute({ sql, args });
+};
+const one = async (sql, args = []) => (await run(sql, args)).rows[0] ?? null;
+const all = async (sql, args = []) => (await run(sql, args)).rows;
+
+/* -------------------------------------------------------------------- meta */
+
+export async function getMeta(key) {
+  const row = await one("SELECT value FROM meta WHERE key = ?", [key]);
   return row ? row.value : null;
 }
 
-export function setMeta(key, value) {
-  open()
-    .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
-    .run(key, value);
+export async function setMeta(key, value) {
+  await run(
+    "INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+    [key, value]
+  );
 }
 
-/* ------------------------------------------------------------------- tags */
+/* -------------------------------------------------------------------- tags */
 
-export function listTags() {
-  return open()
-    .prepare("SELECT id, name, color FROM tags ORDER BY position, name")
-    .all();
-}
+export const listTags = () =>
+  all("SELECT id, name, color FROM tags ORDER BY position, name");
 
-/** Tags are few and always edited together, so a bulk replace in one
-    transaction is simpler than per-tag routes and just as safe. */
-export function replaceTags(tags) {
-  const d = open();
-  d.exec("BEGIN");
-  try {
-    const keep = new Set(tags.map((t) => t.id));
-    for (const row of d.prepare("SELECT id FROM tags").all()) {
-      // ON DELETE SET NULL leaves the events, untagged.
-      if (!keep.has(row.id)) d.prepare("DELETE FROM tags WHERE id = ?").run(row.id);
-    }
-    const up = d.prepare(`
-      INSERT INTO tags (id, name, color, position) VALUES (?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET name = excluded.name, color = excluded.color, position = excluded.position
-    `);
-    tags.forEach((t, i) => up.run(t.id, t.name, t.color, i));
-    d.exec("COMMIT");
-  } catch (err) {
-    d.exec("ROLLBACK");
-    throw err;
-  }
+/** Tags are few and always edited together, so one batched replace is simpler
+    than per-tag routes and just as safe. */
+export async function replaceTags(tags) {
+  const keep = tags.map((t) => t.id);
+  const stmts = [];
+
+  // A parameterised NOT IN, built to the right width.
+  const holes = keep.map(() => "?").join(", ");
+  stmts.push(
+    keep.length
+      ? { sql: `DELETE FROM tags WHERE id NOT IN (${holes})`, args: keep }
+      : { sql: "DELETE FROM tags", args: [] }
+  );
+
+  tags.forEach((t, i) => stmts.push({
+    sql: `INSERT INTO tags (id, name, color, position) VALUES (?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET name = excluded.name,
+                                        color = excluded.color,
+                                        position = excluded.position`,
+    args: [t.id, t.name, t.color, i],
+  }));
+
+  // batch() is transactional: all of it lands, or none of it does.
+  await client.batch(stmts, "write");
   return listTags();
 }
 
@@ -171,16 +217,11 @@ const toApi = (r) => ({
   contactEmail: r.contact_email,
   details: r.details,
   link: r.link,
-  version: r.version,
+  version: Number(r.version),
   updatedAt: r.updated_at,
 });
 
-/**
- * @param {object} opts
- * @param {boolean} opts.includeDrafts  only ever true for an authenticated admin
- * @param {string}  [opts.from] [opts.to] ISO bounds, inclusive of overlap
- */
-export function listEvents({ includeDrafts = false, from, to } = {}) {
+export async function listEvents({ includeDrafts = false, from, to } = {}) {
   const where = [];
   const args = [];
   if (!includeDrafts) where.push("published = 1");
@@ -189,101 +230,124 @@ export function listEvents({ includeDrafts = false, from, to } = {}) {
     where.push("end_utc >= ? AND start_utc <= ?");
     args.push(from, to);
   }
-  const sql =
+  const rows = await all(
     "SELECT * FROM events" +
-    (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
-    " ORDER BY start_utc";
-  return open().prepare(sql).all(...args).map(toApi);
+      (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
+      " ORDER BY start_utc",
+    args
+  );
+  return rows.map(toApi);
 }
 
-export function getEvent(id, { includeDrafts = false } = {}) {
-  const row = open().prepare("SELECT * FROM events WHERE id = ?").get(id);
+export async function getEvent(id, { includeDrafts = false } = {}) {
+  const row = await one("SELECT * FROM events WHERE id = ?", [id]);
   if (!row) return null;
   if (!row.published && !includeDrafts) return null;
   return toApi(row);
 }
 
-export function createEvent(ev) {
+export async function createEvent(ev) {
   const now = new Date().toISOString();
   const id = ev.id || crypto.randomUUID();
-  open().prepare(`
-    INSERT INTO events (id, title, tag_id, start_utc, end_utc, all_day, published,
-                        location, contact_name, contact_email, details, link,
-                        version, created_at, updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)
-  `).run(
-    id, ev.title, ev.tagId ?? null, ev.start, ev.end,
-    ev.allDay ? 1 : 0, ev.published === false ? 0 : 1,
-    ev.location ?? "", ev.contactName ?? "", ev.contactEmail ?? "",
-    ev.details ?? "", ev.link ?? "", now, now
+  await run(
+    `INSERT INTO events (id, title, tag_id, start_utc, end_utc, all_day, published,
+                         location, contact_name, contact_email, details, link,
+                         version, created_at, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)`,
+    [
+      id, ev.title, ev.tagId ?? null, ev.start, ev.end,
+      ev.allDay ? 1 : 0, ev.published === false ? 0 : 1,
+      ev.location ?? "", ev.contactName ?? "", ev.contactEmail ?? "",
+      ev.details ?? "", ev.link ?? "", now, now,
+    ]
   );
   return getEvent(id, { includeDrafts: true });
 }
 
 /**
  * Optimistic concurrency: the caller sends the version it read. If someone
- * else saved in the meantime the versions differ and we refuse, rather than
+ * else saved meanwhile the versions differ and we refuse, rather than
  * silently overwriting their work.
- * @returns {{conflict: true, current: object} | object}
  */
-export function updateEvent(id, patch, expectedVersion) {
-  const d = open();
-  const row = d.prepare("SELECT * FROM events WHERE id = ?").get(id);
+export async function updateEvent(id, patch, expectedVersion) {
+  const row = await one("SELECT * FROM events WHERE id = ?", [id]);
   if (!row) return null;
-  if (expectedVersion != null && row.version !== expectedVersion) {
+  if (expectedVersion != null && Number(row.version) !== Number(expectedVersion)) {
     return { conflict: true, current: toApi(row) };
   }
-  const merged = { ...toApi(row), ...patch };
-  d.prepare(`
-    UPDATE events SET title=?, tag_id=?, start_utc=?, end_utc=?, all_day=?, published=?,
-      location=?, contact_name=?, contact_email=?, details=?, link=?,
-      version = version + 1, updated_at=?
-    WHERE id = ?
-  `).run(
-    merged.title, merged.tagId ?? null, merged.start, merged.end,
-    merged.allDay ? 1 : 0, merged.published ? 1 : 0,
-    merged.location ?? "", merged.contactName ?? "", merged.contactEmail ?? "",
-    merged.details ?? "", merged.link ?? "", new Date().toISOString(), id
+  const m = { ...toApi(row), ...patch };
+  await run(
+    `UPDATE events SET title=?, tag_id=?, start_utc=?, end_utc=?, all_day=?, published=?,
+       location=?, contact_name=?, contact_email=?, details=?, link=?,
+       version = version + 1, updated_at=?
+     WHERE id = ?`,
+    [
+      m.title, m.tagId ?? null, m.start, m.end,
+      m.allDay ? 1 : 0, m.published ? 1 : 0,
+      m.location ?? "", m.contactName ?? "", m.contactEmail ?? "",
+      m.details ?? "", m.link ?? "", new Date().toISOString(), id,
+    ]
   );
   return getEvent(id, { includeDrafts: true });
 }
 
-export function deleteEvent(id) {
-  return open().prepare("DELETE FROM events WHERE id = ?").run(id).changes > 0;
+export async function deleteEvent(id) {
+  const res = await run("DELETE FROM events WHERE id = ?", [id]);
+  return Number(res.rowsAffected) > 0;
 }
 
-/* --------------------------------------------------------------- sessions */
+/* ---------------------------------------------------------------- sessions */
 
-export function createSession(token, ttlHours = 12) {
+export async function createSession(token, ttlHours = 12) {
   const now = new Date();
   const exp = new Date(now.getTime() + ttlHours * 3600 * 1000);
-  open()
-    .prepare("INSERT INTO sessions (token, created_at, expires_at) VALUES (?,?,?)")
-    .run(token, now.toISOString(), exp.toISOString());
+  await run("INSERT INTO sessions (token, created_at, expires_at) VALUES (?,?,?)", [
+    token, now.toISOString(), exp.toISOString(),
+  ]);
   return exp.toISOString();
 }
 
-export function sessionValid(token) {
+export async function sessionValid(token) {
   if (!token) return false;
-  const d = open();
-  d.prepare("DELETE FROM sessions WHERE expires_at < ?").run(new Date().toISOString());
-  return !!d.prepare("SELECT token FROM sessions WHERE token = ?").get(token);
+  await run("DELETE FROM sessions WHERE expires_at < ?", [new Date().toISOString()]);
+  return !!(await one("SELECT token FROM sessions WHERE token = ?", [token]));
 }
 
-export function destroySession(token) {
-  open().prepare("DELETE FROM sessions WHERE token = ?").run(token);
+export async function destroySession(token) {
+  await run("DELETE FROM sessions WHERE token = ?", [token]);
+}
+
+/* -------------------------------------------------------------- passphrase */
+
+/* On a public URL the "first visitor claims the calendar" flow is a land
+   grab. Setting ADMIN_PASSPHRASE closes that window by claiming it at boot.
+   Changing the variable rotates the passphrase and signs everyone out. */
+async function applyEnvPassphrase() {
+  const envPass = process.env.ADMIN_PASSPHRASE;
+  if (!envPass) return;
+  if (envPass.length < 8) {
+    console.error("  [org-calendar] ADMIN_PASSPHRASE must be at least 8 characters. Ignoring it.");
+    return;
+  }
+  const stored = await getMeta("adminHash");
+  if (stored && verifyPassphrase(envPass, stored)) return;
+  await setMeta("adminHash", hashPassphrase(envPass));
+  await run("DELETE FROM sessions");
+  console.log(stored
+    ? "  [org-calendar] ADMIN_PASSPHRASE changed — existing sessions revoked"
+    : "  [org-calendar] admin passphrase set from ADMIN_PASSPHRASE");
 }
 
 /* ------------------------------------------------------------------- seed */
 
 const TAG_COLORS = ["#2F6FE0", "#00857A", "#B4530A", "#7A3EA8", "#C21B58", "#4A6E12"];
 
-function seed() {
+async function seed() {
   const base = startOfDay(new Date());
   const at = (day, h, m = 0) =>
     new Date(base.getFullYear(), base.getMonth(), base.getDate() + day, h, m).toISOString();
 
-  replaceTags([
+  await replaceTags([
     { id: "t1", name: "Seminars", color: TAG_COLORS[0] },
     { id: "t2", name: "Deadlines", color: TAG_COLORS[4] },
     { id: "t3", name: "Social", color: TAG_COLORS[3] },
@@ -291,31 +355,31 @@ function seed() {
   ]);
 
   const rows = [
-    ["Weekly research seminar", "t1", at(0, 12), at(0, 13, 30), 0, 1, "Building 4, Room 210",
-      "Priya Raman", "praman@example.org", "Open to everyone. Lunch provided; RSVP not required."],
-    ["Reading group: attention mechanisms", "t1", at(0, 13), at(0, 14), 0, 1, "Building 4, Room 118",
-      "Sam Okonkwo", "sokonkwo@example.org", "Overlaps the seminar on purpose — a good test of the week view."],
-    ["Grant narrative due to the dean's office", "t2", at(3, 0), at(3, 0), 1, 1, "",
-      "Ana Duarte", "aduarte@example.org", "Submit the final PDF through the internal portal before end of day."],
-    ["New-hire coffee", "t3", at(1, 9), at(1, 10), 0, 1, "Atrium café",
-      "Marcus Bell", "", "Drop in any time in the hour."],
+    ["Weekly research seminar", "t1", at(0, 12), at(0, 13, 30), 0, 1, "Landau 007",
+      "John Doe", "johndoe@stanford.edu", "Open to everyone. Lunch provided; RSVP not required."],
+    ["Reading group", "t1", at(0, 13), at(0, 14), 0, 1, "Landau 132",
+      "Jane Roe", "janeroe@stanford.edu", "Overlaps the seminar on purpose — a good test of the week view."],
+    ["Grant narrative due", "t2", at(3, 0), at(3, 0), 1, 1, "",
+      "Jane Roe", "janeroe@stanford.edu", "Submit the final PDF through the internal portal before end of day."],
+    ["New-hire coffee", "t3", at(1, 9), at(1, 10), 0, 1, "Landau atrium",
+      "John Doe", "", "Drop in any time in the hour."],
     ["Network maintenance window", "t4", at(5, 20), at(5, 23, 59), 0, 1, "All buildings",
-      "IT service desk", "it@example.org", "Wired and wireless access will be intermittent."],
+      "IT service desk", "it@stanford.edu", "Wired and wireless access will be intermittent."],
     ["Site visit — external reviewers", "t2", at(12, 0), at(14, 0), 1, 1, "Main campus",
-      "Ana Duarte", "aduarte@example.org", "Three days. A multi-day event, to check the year and month views."],
+      "Jane Roe", "janeroe@stanford.edu", "Three days. A multi-day event, to check the year and month views."],
+    ["Happy Hour", "t3", at(2, 17), at(2, 19), 0, 1, "Landau 007",
+      "John Doe", "johndoe@stanford.edu", "Drinks and snacks provided."],
     ["Quarterly all-hands", "t1", at(8, 15), at(8, 16, 30), 0, 1, "Auditorium + livestream",
-      "Office of the Director", "director@example.org", "Agenda circulated the week before."],
-    ["Summer picnic", "t3", at(24, 11), at(24, 15), 0, 1, "Riverside park, shelter B",
-      "Social committee", "social@example.org", "Families welcome. Bring a dish if you can."],
-    /* Two drafts, so there's something to see once you unlock editing. */
+      "Department office", "econ-office@stanford.edu", "Agenda circulated the week before."],
+    /* Two drafts, so there's something to see once you log in to edit. */
     ["Reorg announcement (date not fixed)", "t1", at(6, 10), at(6, 11), 0, 0, "Auditorium",
-      "Office of the Director", "director@example.org", "Draft — do not circulate until the date is confirmed."],
+      "Department office", "econ-office@stanford.edu", "Draft — do not circulate until the date is confirmed."],
     ["Holiday party — venue TBC", "t3", at(30, 18), at(30, 22), 0, 0, "TBC",
-      "Social committee", "social@example.org", "Draft — waiting on a quote from the venue."],
+      "Social committee", "econ-social@stanford.edu", "Draft — waiting on a quote from the venue."],
   ];
 
   for (const [title, tagId, start, end, allDay, published, location, cn, ce, details] of rows) {
-    createEvent({
+    await createEvent({
       title, tagId, start, end,
       allDay: !!allDay, published: !!published,
       location, contactName: cn, contactEmail: ce, details, link: "",

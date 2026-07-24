@@ -77,11 +77,6 @@ function serveStatic(req, res, next) {
 const server = http.createServer((req, res) => {
   securityHeaders(res);
 
-  if (req.url === "/healthz") {
-    res.statusCode = 200;
-    res.setHeader("Content-Type", "application/json");
-    return res.end(JSON.stringify({ ok: true, events: db.listEvents().length }));
-  }
 
   // The API answers what it recognises and calls next() for everything else.
   handle(req, res, () => serveStatic(req, res, () => {
@@ -97,11 +92,45 @@ const server = http.createServer((req, res) => {
   });
 });
 
-db.open(); // create/migrate before we accept traffic
+/* Refuse to start on a host that will silently eat the database.
+
+   With TURSO_DATABASE_URL set the data lives elsewhere and none of this
+   applies. Without it we are writing a local file, and on Render that file
+   is replaced on every deploy — the calendar quietly resets to sample data,
+   which is the worst kind of failure because it looks like it worked.
+
+   Set ALLOW_EPHEMERAL_DATA=1 if you genuinely want a throwaway instance. */
+if (process.env.RENDER && !db.isRemote() && !process.env.ALLOW_EPHEMERAL_DATA) {
+  console.error(
+    "\n  Refusing to start: TURSO_DATABASE_URL is not set, so this would write\n" +
+    "  a local file that Render replaces on every deploy.\n\n" +
+    "  Point it at the hosted database instead:\n" +
+    "    Environment -> TURSO_DATABASE_URL = libsql://<your-db>.turso.io\n" +
+    "    Environment -> TURSO_AUTH_TOKEN  = <turso db tokens create ...>\n\n" +
+    "  Or attach a persistent disk and set DATA_DIR to its mount path.\n"
+  );
+  process.exit(1);
+}
+
+try {
+  await db.openWithTimeout(); // connect and migrate before we accept traffic
+} catch (err) {
+  const where = db.isRemote() ? db.dbPath() : db.dbPath();
+  console.error(
+    `\n  Could not open the database (${where}).\n\n  ${err.message}\n\n` +
+    (db.isRemote()
+      ? "  Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN. A token is scoped to\n" +
+        "  one database, so a mismatch reads as an auth failure. Confirm with:\n" +
+        "    turso db show <your-db> --url\n" +
+        "    turso db tokens create <your-db>\n"
+      : "  Check that the directory exists and is writable.\n")
+  );
+  process.exit(1);
+}
 
 /* An unclaimed calendar on a public URL belongs to whoever finds it first.
    Refuse to start rather than serve one. */
-if (!db.getMeta("adminHash")) {
+if (!(await db.getMeta("adminHash"))) {
   console.error(
     "\n  This calendar has no admin passphrase, and on a public address the\n" +
     "  first visitor would be able to claim it.\n\n" +
@@ -120,7 +149,7 @@ server.on("error", (err) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`  Org Calendar listening on http://${HOST}:${PORT}`);
-  console.log(`  database: ${db.dbPath()}`);
+  console.log(`  database: ${db.dbPath()}${db.isRemote() ? "  (remote)" : "  (local file)"}`);
   console.log(`  serving:  ${DIST}`);
 });
 
@@ -133,8 +162,8 @@ for (const sig of ["SIGTERM", "SIGINT"]) {
     closing = true;
     console.log(`\n  ${sig} received, shutting down`);
 
-    const finish = (why) => {
-      db.close(); // checkpoints the WAL — must run on every exit path
+    const finish = async (why) => {
+      await db.close(); // checkpoints the WAL — must run on every exit path
       console.log(`  closed (${why})`);
       process.exit(0);
     };

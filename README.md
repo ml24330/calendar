@@ -7,16 +7,34 @@ unpublished drafts until they're ready.
 
 ## Run it
 
-Node 22.5 or newer — the app uses Node's built-in SQLite, so there's no native
-module to compile.
+Node 20.6 or newer.
 
 ```bash
 npm install
-npm run dev
+npm run dev          # local database, a file in this directory
 ```
 
 Open <http://localhost:5173>. First run creates `calendar.db` with a couple of
-weeks of sample events, including two drafts. Delete that file to start over.
+weeks of sample events, including two drafts. Delete it to start over.
+
+### Two development modes
+
+| Command | Database | For |
+| --- | --- | --- |
+| `npm run dev` | `./calendar.db`, local file | normal work. Break whatever you like |
+| `npm run dev-live-db` | the hosted Turso database | reproducing something real, or fixing live data |
+
+`dev-live-db` reads `.env` (via Node's own `--env-file`, no dependency) and
+prints a red banner, because **it is the production database**. An event you
+delete while poking around is gone for everyone.
+
+```bash
+cp .env.example .env      # then fill in
+turso db show <your-db> --url
+turso db tokens create <your-db>
+```
+
+`.env` is gitignored. `npm run dev` ignores it entirely.
 
 ## Try it
 
@@ -61,8 +79,8 @@ other picks it up within about fifteen seconds.
 ```
 index.html
 vite.config.js          Vite + the API, mounted as a plugin
-calendar.db             SQLite, created on first run
-scripts/run.mjs         launcher (see "Why a launcher" below)
+calendar.db             local SQLite file (npm run dev only)
+scripts/run.mjs         loads .env for npm run dev-live-db
 server/
   db.js                 schema, migrations, queries, seed
   auth.js               scrypt hashing, session tokens
@@ -116,12 +134,11 @@ and a subscribed feed can't drift apart. Nothing in that module touches browser
 globals at import time, which is what lets Node load it — worth remembering if
 you edit it.
 
-**Why a launcher.** `node:sqlite` needed `--experimental-sqlite` until Node
-23.4. `scripts/run.mjs` checks your version and adds the flag only if it's
-wanted, which beats a README instruction people forget. The alternative,
-`better-sqlite3`, needs a prebuilt binary for your exact platform and Node
-version or it falls back to compiling with node-gyp — which is a bad first
-experience for anyone you hand this to.
+**Why libSQL rather than plain SQLite.** One driver speaks both `file:` and
+`libsql://`, so local development and production run identical code down to
+the query layer. The cost is that every database call is async — a network
+round trip can't honestly pretend to be synchronous.
+
 
 **PDF fonts.** pdfkit's built-in Helvetica keeps the repo small. To match the
 screen, drop IBM Plex `.ttf` files into `server/fonts/`, register them with
@@ -168,30 +185,46 @@ Service by hand:
 | Build command | `npm ci && npm run build` |
 | Start command | `npm start` |
 | Health check path | `/healthz` |
-| Disk | mount at `/var/data`, 1 GB |
 
 | Variable | Required | Does |
 | --- | --- | --- |
 | `ADMIN_PASSPHRASE` | **yes** | claims the calendar at boot. Change it to rotate; that revokes every session |
-| `DATA_DIR` | **yes** | where `calendar.db` lives. Must be the disk mount path |
+| `TURSO_DATABASE_URL` | **yes** | the hosted database |
+| `TURSO_AUTH_TOKEN` | **yes** | token for it, from `turso db tokens create` |
 | `NODE_VERSION` | yes | 22.5+ for built-in SQLite. Pinned in `.node-version` too |
 | `PORT` | no | Render sets this |
 
-### The disk is not optional
+### Where the data lives
 
-Render gives every deploy a fresh filesystem. Without a mounted disk,
-`calendar.db` is recreated from the seed on each deploy and every event you've
-added is gone. The free plan has no disks, so SQLite needs at least Starter.
+The database is hosted on Turso, which is libSQL — a fork of SQLite. The
+schema and every query in `server/db.js` are ordinary SQLite; only the driver
+changed. Set two variables in the Render dashboard:
 
-Two consequences worth knowing before you commit:
+```
+TURSO_DATABASE_URL = libsql://<your-db>.turso.io
+TURSO_AUTH_TOKEN   = <turso db tokens create <your-db>>
+```
 
-- **A service with a disk can only run one instance.** No horizontal scaling.
-  Fine for a calendar; a hard ceiling if this grows into something else.
-- **Deploys are stop-then-start, not zero-downtime.** Render can't run two
-  instances against one disk, so expect a few seconds of 502 on each deploy.
+Because nothing is stored on the instance, no persistent disk is needed and
+the free plan works. That also removes the two constraints a disk imposed:
+the service is no longer pinned to one instance, and deploys no longer have to
+stop-then-start.
 
-If either is a problem, move to Render Postgres. `server/db.js` is the only
-file that touches storage — the queries are plain SQL and the surface is small.
+If `TURSO_DATABASE_URL` is missing the server refuses to start on Render
+rather than writing a local file that the next deploy would erase. `/healthz`
+reports which database is in use and whether it survives a deploy.
+
+Free Turso databases are generous but not unlimited, and the plans move; check
+<https://turso.tech/pricing> before assuming headroom.
+
+### Backups
+
+`turso db shell <your-db> ".dump" > backup.sql` takes a portable snapshot.
+`GET /feed.ics` with an admin token is a second, coarser copy: every event
+including drafts, in a format any calendar can read.
+
+Locally, `calendar.db` is a normal SQLite file. The shutdown path checkpoints
+the WAL on SIGTERM, so a copy taken while the server is stopped is complete.
 
 ### Why the server refuses to start without `ADMIN_PASSPHRASE`
 
@@ -200,21 +233,6 @@ grab on a public URL: anyone who finds the address before you sets the
 passphrase and owns it. Setting the variable claims it at boot instead, so
 there's no window. The production server exits with an explanation rather than
 serving an unclaimed calendar.
-
-### Backups
-
-`calendar.db` is a single file, but the app runs SQLite in WAL mode, so a copy
-taken while it's running isn't a complete snapshot. The shutdown path
-checkpoints the WAL on SIGTERM, so a copy taken while stopped is fine. For a
-live backup use `VACUUM INTO`:
-
-```bash
-sqlite3 /var/data/calendar.db "VACUUM INTO '/var/data/backup.db'"
-```
-
-Render's disk snapshots cover you day to day; this is for taking a copy off the
-platform. There's also `GET /feed.ics` with an admin token, which gives you
-every event including drafts in a portable format.
 
 ### Still outstanding
 

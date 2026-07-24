@@ -5,13 +5,15 @@
   "type": "module",
   "description": "A shared, organization-wide calendar with tag filtering and calendar-app sync.",
   "scripts": {
-    "dev": "node scripts/run.mjs dev",
-    "build": "node scripts/run.mjs build",
-    "preview": "node scripts/run.mjs preview",
-    "start": "node scripts/run.mjs start",
+    "dev": "vite",
+    "dev-live-db": "node scripts/run.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node server/index.js",
     "test": "node test/tz.test.mjs"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.4",
     "pdfkit": "^0.15.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
@@ -21,6 +23,6 @@
     "vite": "^5.4.11"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": ">=20.6"
   }
 }

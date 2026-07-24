@@ -7,25 +7,23 @@ services:
   - type: web
     name: org-calendar
     runtime: node
-    plan: starter            # free has no persistent disk; SQLite needs one
+    plan: free               # no disk needed: the database is hosted on Turso
     region: oregon
     branch: main
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     autoDeploy: true
-    disk:
-      name: calendar-data
-      mountPath: /var/data   # matches DATA_DIR below
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: 22.20.0
-      - key: DATA_DIR
-        value: /var/data
       - key: TZ
         # The app pins display to CALENDAR_TZ in src/lib/tz.js regardless, but
         # matching the host clock keeps log timestamps readable.
         value: America/Los_Angeles
       - key: ADMIN_PASSPHRASE
-        sync: false          # set this by hand in the dashboard; never commit it
+        sync: false          # set these by hand in the dashboard; never commit them
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

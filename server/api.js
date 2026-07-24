@@ -43,7 +43,7 @@ function readBody(req, limit = 4 * 1024 * 1024) {
   });
 }
 
-const isAdmin = (req, url) => db.sessionValid(tokenFrom(req, url));
+const isAdmin = (req, url) => db.sessionValid(tokenFrom(req, url)); // async
 
 /* --------------------------------------------------------------- validation */
 
@@ -100,14 +100,27 @@ export async function handle(req, res, next) {
   const p = url.pathname;
 
   try {
+    /* ---- liveness, and where the data actually lives ---- */
+    if (p === "/healthz" && req.method === "GET") {
+      const events = await db.listEvents();
+      return json(res, 200, {
+        ok: true,
+        events: events.length,
+        database: db.dbPath(),
+        remote: db.isRemote(),
+        // Whether this survives a deploy, which is the question worth asking.
+        persistent: db.isRemote() || !!process.env.DATA_DIR,
+      });
+    }
+
     /* ---- everything the app needs on load ---- */
     if (p === "/api/bootstrap" && req.method === "GET") {
-      const admin = isAdmin(req, url);
+      const admin = await isAdmin(req, url);
       return json(res, 200, {
-        claimed: !!db.getMeta("adminHash"),
+        claimed: !!await db.getMeta("adminHash"),
         admin,
-        tags: db.listTags(),
-        events: db.listEvents({ includeDrafts: admin }),
+        tags: await db.listTags(),
+        events: await db.listEvents({ includeDrafts: admin }),
       });
     }
 
@@ -116,12 +129,12 @@ export async function handle(req, res, next) {
       if (req.method === "POST") {
         const body = await readBody(req);
         const pass = String(body.passphrase || "");
-        const existing = db.getMeta("adminHash");
+        const existing = await db.getMeta("adminHash");
 
         if (!existing) {
           // First run: whoever gets here first claims the calendar.
           if (pass.length < 8) return json(res, 400, { error: "Use at least 8 characters." });
-          db.setMeta("adminHash", hashPassphrase(pass));
+          await db.setMeta("adminHash", hashPassphrase(pass));
         } else if (!verifyPassphrase(pass, existing)) {
           // Uniform delay so a wrong passphrase can't be distinguished by timing.
           await new Promise((r) => setTimeout(r, 250));
@@ -129,33 +142,33 @@ export async function handle(req, res, next) {
         }
 
         const token = newToken();
-        const expires = db.createSession(token);
+        const expires = await db.createSession(token);
         return json(res, 200, { token, expires });
       }
 
       if (req.method === "DELETE") {
         const t = tokenFrom(req, url);
-        if (t) db.destroySession(t);
+        if (t) await db.destroySession(t);
         return json(res, 200, { ok: true });
       }
     }
 
     /* ---- writes: all admin-only ---- */
     if (p === "/api/events" && req.method === "POST") {
-      if (!isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
+      if (!await isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
       const body = await readBody(req);
-      return json(res, 201, db.createEvent(validateEvent(body)));
+      return json(res, 201, await db.createEvent(validateEvent(body)));
     }
 
     const eventMatch = p.match(/^\/api\/events\/([\w-]+)$/);
     if (eventMatch) {
       const id = eventMatch[1];
-      if (!isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
+      if (!await isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
 
       if (req.method === "PATCH") {
         const body = await readBody(req);
         const patch = validateEvent(body, { partial: true });
-        const result = db.updateEvent(id, patch, body.version);
+        const result = await db.updateEvent(id, patch, body.version);
         if (!result) return json(res, 404, { error: "That event no longer exists." });
         if (result.conflict) {
           return json(res, 409, {
@@ -167,7 +180,7 @@ export async function handle(req, res, next) {
       }
 
       if (req.method === "DELETE") {
-        return db.deleteEvent(id)
+        return await db.deleteEvent(id)
           ? json(res, 200, { ok: true })
           : json(res, 404, { error: "That event no longer exists." });
       }
@@ -175,7 +188,7 @@ export async function handle(req, res, next) {
 
 
     if (p === "/api/tags" && req.method === "PUT") {
-      if (!isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
+      if (!await isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
       const body = await readBody(req);
       if (!Array.isArray(body.tags)) return json(res, 400, { error: "Expected { tags: [] }" });
       for (const t of body.tags) {
@@ -183,14 +196,14 @@ export async function handle(req, res, next) {
           return json(res, 400, { error: "Each tag needs an id, a name, and a #rrggbb colour." });
         }
       }
-      return json(res, 200, { tags: db.replaceTags(body.tags) });
+      return json(res, 200, { tags: await db.replaceTags(body.tags) });
     }
 
     /* ---- calendar feed: published only, unless a token says otherwise ---- */
     if (p === "/feed.ics" && req.method === "GET") {
-      const admin = isAdmin(req, url);
-      const tags = db.listTags();
-      let events = db.listEvents({ includeDrafts: admin });
+      const admin = await isAdmin(req, url);
+      const tags = await db.listTags();
+      let events = await db.listEvents({ includeDrafts: admin });
       let name = ORG_NAME;
 
       const wanted = url.searchParams.get("tag");
@@ -215,7 +228,7 @@ export async function handle(req, res, next) {
 
     /* ---- pdf of whatever view the caller was looking at ---- */
     if (p === "/export.pdf" && req.method === "GET") {
-      const admin = isAdmin(req, url);
+      const admin = await isAdmin(req, url);
       const view = ["year", "month", "week", "day"].includes(url.searchParams.get("view"))
         ? url.searchParams.get("view")
         : "month";
@@ -223,13 +236,13 @@ export async function handle(req, res, next) {
       const date = dateParam && !isNaN(new Date(dateParam)) ? new Date(dateParam) : new Date();
       const { from, to, label } = periodRange(view, date);
 
-      let events = db.listEvents({
+      let events = await db.listEvents({
         includeDrafts: admin,
         from: from.toISOString(),
         to: to.toISOString(),
       });
 
-      const allTags = db.listTags();
+      const allTags = await db.listTags();
       const only = (url.searchParams.get("tags") || "").split(",").filter(Boolean);
       let tags = allTags;
       if (only.length) {

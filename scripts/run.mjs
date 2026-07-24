@@ -1,51 +1,56 @@
-/* Launcher.
+/* Launcher for `npm run dev-live-db`.
 
-   node:sqlite needed --experimental-sqlite until Node 23.4, so work out
-   whether this Node wants the flag and re-exec with it. Beats a README
-   instruction people forget, and beats a native module that has to compile
-   on the host.
-
-   Modes: dev | build | preview  (Vite)      start (production server) */
+   Loads .env (Node's own --env-file, no dependency) so the Vite dev server
+   picks up TURSO_DATABASE_URL, then hands over. `npm run dev` doesn't come
+   through here at all — it's plain Vite against a local file. */
 
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const require = createRequire(import.meta.url);
 const [major, minor] = process.versions.node.split(".").map(Number);
 
-if (major < 22 || (major === 22 && minor < 5)) {
+if (major < 20 || (major === 20 && minor < 6)) {
+  console.error(`\n  Needs Node 20.6+ for --env-file. This is ${process.versions.node}.\n`);
+  process.exit(1);
+}
+
+const ENV_FILE = path.resolve(".env");
+if (!existsSync(ENV_FILE)) {
   console.error(
-    `\n  Org Calendar needs Node 22.5 or newer for its built-in SQLite.\n` +
-    `  This is ${process.versions.node}.\n`
+    "\n  No .env file.\n\n" +
+    "  Copy .env.example to .env and fill in your Turso credentials:\n" +
+    "    cp .env.example .env\n\n" +
+    "  Get them with:\n" +
+    "    turso db show <your-db> --url\n" +
+    "    turso db tokens create <your-db>\n"
   );
   process.exit(1);
 }
 
-const needsFlag = major === 22 || (major === 23 && minor < 4);
-const flags = needsFlag ? ["--experimental-sqlite", "--no-warnings"] : [];
-const mode = process.argv[2] || "dev";
-
-let target;
-if (mode === "start") {
-  // Production. Vite is a devDependency and may not be installed at all.
-  target = [path.resolve("server/index.js")];
-} else {
-  let vite;
-  try {
-    vite = path.join(path.dirname(require.resolve("vite/package.json")), "bin", "vite.js");
-  } catch {
-    vite = path.resolve("node_modules/vite/bin/vite.js");
-  }
-  if (!existsSync(vite)) {
-    console.error("\n  Can't find Vite. Run `npm install` first.\n");
-    process.exit(1);
-  }
-  target = [vite, ...(mode === "dev" ? [] : [mode])];
+if (!/^\s*TURSO_DATABASE_URL\s*=\s*\S/m.test(readFileSync(ENV_FILE, "utf8"))) {
+  console.error("\n  .env has no TURSO_DATABASE_URL, so this would just use the local file.\n");
+  process.exit(1);
 }
 
-const child = spawn(process.execPath, [...flags, ...target], { stdio: "inherit" });
-// Let Render/Docker stop us cleanly instead of being SIGKILLed after a timeout.
+console.log(
+  "\n  \x1b[41m\x1b[97m  LIVE DATABASE  \x1b[0m  Edits here change what everyone sees.\n" +
+  "  Use `npm run dev` for a local copy.\n"
+);
+
+let vite;
+try {
+  vite = path.join(path.dirname(require.resolve("vite/package.json")), "bin", "vite.js");
+} catch {
+  vite = path.resolve("node_modules/vite/bin/vite.js");
+}
+if (!existsSync(vite)) {
+  console.error("\n  Can't find Vite. Run `npm install` first.\n");
+  process.exit(1);
+}
+
+const child = spawn(process.execPath, [`--env-file=${ENV_FILE}`, vite], { stdio: "inherit" });
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => child.kill(sig));
 child.on("exit", (code, signal) => process.exit(signal ? 1 : code ?? 0));
