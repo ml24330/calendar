@@ -185,7 +185,16 @@ input, textarea, select { font: inherit; color: inherit; }
 }
 .tg-allday .gut {
   border-right: 1px solid var(--rule-soft); display: flex;
-  align-items: center; justify-content: flex-end; padding-right: 7px;
+  align-items: center; justify-content: flex-end;
+  /* 6px matches .tg-hr, so this label and the hour labels share an edge. */
+  padding-right: 6px;
+}
+/* "All day" with the eyebrow's tracking measures ~52px in a 54px gutter, so
+   it filled the column and flex-end had nothing to push against — which is
+   why it read as left-aligned. Dropping the tracking brings it to ~42px. */
+.tg-allday .gut .eyebrow {
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 .tg-allday .col {
   border-right: 1px solid var(--rule-soft); padding: 3px;
