@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Calendar">
+  <!-- Placeholder mark. Cardinal (#8C1515) is Stanford's colour, but the
+       artwork is original: no tree, no wordmark. To use official branding,
+       replace this file with an approved asset from the Stanford Identity
+       Toolkit; nothing else needs changing.
+       Deliberately only five shapes, so it still reads at 16px in a tab. -->
+  <rect width="32" height="32" rx="7" fill="#8C1515"/>
+  <rect x="5" y="6" width="22" height="20" rx="3" fill="#fff"/>
+  <rect x="5" y="11" width="22" height="2" fill="#8C1515"/>
+  <rect x="8" y="16" width="7.5" height="7" rx="1.5" fill="#8C1515"/>
+  <rect x="17.5" y="16" width="6.5" height="7" rx="1.5" fill="#DFA3A3"/>
+</svg>
