@@ -17,8 +17,6 @@ export function YearPlanner({ year, byDay, tagsById, tags, hidden, onPickDay }) 
   const cells = [];
 
   for (let day = 1; day <= 31; day++) {
-    cells.push(<div key={`n${day}`} className="yp-rn" style={{ gridRow: day + 1 }}>{day}</div>);
-
     for (let m = 0; m < 12; m++) {
       if (day > daysInMonth(year, m)) {
         cells.push(<div key={`v${m}-${day}`} className="yp-c void" style={{ gridRow: day + 1 }} />);
@@ -39,6 +37,11 @@ export function YearPlanner({ year, byDay, tagsById, tags, hidden, onPickDay }) 
             ? `${fmtLongDate(d)} — ${list.map((e) => e.title).join(", ")}`
             : fmtLongDate(d)}
         >
+          {/* Date inside each cell rather than once down the left edge: by
+              December the eye has eleven columns to travel back across, and the
+              number is what people are looking for. The weekday stays, faded,
+              as secondary information. */}
+          <span className="yp-dn">{day}</span>
           <span className="wd">{DAY_LETTER[d.getDay()]}</span>
           <span className="yp-bars">
             {bars.map((ev, i) => (
@@ -63,10 +66,9 @@ export function YearPlanner({ year, byDay, tagsById, tags, hidden, onPickDay }) 
   return (
     <>
       <div className="yp-scroll">
-        <div className="yp" style={{ gridTemplateColumns: "36px repeat(12, minmax(58px, 1fr))" }}>
-          <div className="yp-corner" style={{ gridRow: 1, gridColumn: 1 }} />
+        <div className="yp" style={{ gridTemplateColumns: "repeat(12, minmax(78px, 1fr))" }}>
           {MON_ABBR.map((m, i) => (
-            <div key={m} className="yp-mh" style={{ gridRow: 1, gridColumn: i + 2 }}>{m}</div>
+            <div key={m} className="yp-mh" style={{ gridRow: 1, gridColumn: i + 1 }}>{m}</div>
           ))}
           {cells}
         </div>

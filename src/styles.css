@@ -221,17 +221,11 @@ input, textarea, select { font: inherit; color: inherit; }
 
 /* ---- year planner (signature view) ---- */
 .yp-scroll { overflow-x: auto; }
-.yp { display: grid; min-width: 860px; }
+.yp { display: grid; min-width: 960px; }
 .yp-mh {
   padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--rule);
   border-right: 1px solid var(--rule-soft); font-family: 'IBM Plex Sans Condensed', sans-serif;
   font-weight: 700; font-size: 13px; letter-spacing: .04em; text-transform: uppercase;
-}
-.yp-corner { border-bottom: 1px solid var(--rule); border-right: 1px solid var(--rule-soft); }
-.yp-rn {
-  font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted);
-  text-align: right; padding: 0 6px 0 4px; border-right: 1px solid var(--rule-soft);
-  display: flex; align-items: center; justify-content: flex-end;
 }
 .yp-c {
   border-right: 1px solid var(--rule-soft); border-bottom: 1px solid #EDEFF5;
@@ -243,7 +237,23 @@ input, textarea, select { font: inherit; color: inherit; }
   background: repeating-linear-gradient(135deg,#F7F8FB,#F7F8FB 4px,#EFF1F6 4px,#EFF1F6 8px);
 }
 .yp-c:hover:not(.void) { background: #E8EDFA; }
-.yp-c .wd { color: #A7AEC6; font-family: 'IBM Plex Mono', monospace; width: 8px; flex: none; }
+/* Date first and solid; weekday after it and faded, so the number reads as
+   the primary label. Fixed width keeps 1 and 31 aligned down a column. */
+.yp-c .yp-dn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--ink);
+  width: 13px;
+  text-align: right;
+  flex: none;
+}
+.yp-c .wd {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink);
+  opacity: .4;
+  width: 8px;
+  flex: none;
+}
 .yp-c.today { box-shadow: inset 0 0 0 2px var(--signal); }
 .yp-bars { display: flex; gap: 2px; align-items: center; min-width: 0; }
 .yp-bar { height: 7px; border-radius: 1px; flex: none; }
