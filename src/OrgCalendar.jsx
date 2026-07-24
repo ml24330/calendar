@@ -3,7 +3,7 @@ import {
   MONTHS, MON_ABBR, DAY_ABBR, addDays, addMonths, startOfDay, startOfWeek, slug,
 } from "./lib/dates.js";
 import { expandDays, readableOn } from "./lib/layout.js";
-import { toZoned, fromZoned, zonedNow, ZONE_LABEL, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
+import { toZoned, fromZoned, zonedNow, ZONE_LABEL, ZONE_NAME, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
 import { downloadICS } from "./lib/ics.js";
 import * as api from "./lib/api.js";
 import { ORG_NAME, CUR_YEAR } from "./config.js";
@@ -277,9 +277,16 @@ export default function OrgCalendar() {
           <section className="panel">
             <div className="panel-h" style={{ display: "flex", alignItems: "center" }}>
               <span className="eyebrow">Tags</span>
-              <button className="more" style={{ marginLeft: "auto" }} onClick={() => setHidden(new Set())}>
-                show all
-              </button>
+              {/* Only when there's something to clear. A permanently visible
+                  control next to a list reads as "expand", which this is not —
+                  the list is never truncated. */}
+              {hidden.size > 0 && (
+                <button className="more" style={{ marginLeft: "auto" }}
+                  onClick={() => setHidden(new Set())}
+                  title="Stop filtering and show every tag's events">
+                  select all
+                </button>
+              )}
             </div>
             <div className="panel-b" style={{ paddingTop: 6, paddingBottom: 6 }}>
               {tags.map((t) => {
@@ -354,7 +361,7 @@ export default function OrgCalendar() {
           <p className="note">
             Keys: <span className="mono">←</span> <span className="mono">→</span> to move,
             <span className="mono"> T</span> for today, <span className="mono">Y M W D</span> to
-            switch views. All times are in {ZONE_LABEL}.
+            switch views. All times are in {ZONE_NAME}.
           </p>
         </aside>
 

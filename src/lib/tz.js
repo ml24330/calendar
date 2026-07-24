@@ -31,6 +31,18 @@ export const CALENDAR_TZ = "America/Los_Angeles";
    themselves still convert with the real offset for each instant. */
 export const ZONE_LABEL = "PT";
 
+/* The same zone spelled out, for prose. Anything not in the table falls back
+   to the abbreviation, so an unlisted zone reads a little tersely rather than
+   wrongly. */
+const ZONE_NAMES = {
+  PT: "Pacific Time",
+  MT: "Mountain Time",
+  CT: "Central Time",
+  ET: "Eastern Time",
+};
+
+export const ZONE_NAME = ZONE_NAMES[ZONE_LABEL] || ZONE_LABEL;
+
 const PARTS = new Intl.DateTimeFormat("en-US", {
   timeZone: CALENDAR_TZ,
   hour12: false,
