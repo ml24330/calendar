@@ -12,7 +12,7 @@ import {
   fmtLongDate, periodRange, orderedDays,
 } from "../src/lib/dates.js";
 import { expandDays } from "../src/lib/layout.js";
-import { toZoned, zoneAbbr, CALENDAR_TZ } from "../src/lib/tz.js";
+import { toZoned, ZONE_LABEL } from "../src/lib/tz.js";
 
 const INK = "#17203A";
 const MUTED = "#737C99";
@@ -57,7 +57,7 @@ function header(doc, { orgName, label, view, tags, includeDrafts, filtered }) {
     view[0].toUpperCase() + view.slice(1) + " view",
     filtered ? "filtered" : "all tags",
     includeDrafts ? "includes drafts" : "published only",
-    "times in " + zoneAbbr(),
+    "times in " + ZONE_LABEL,
     "generated " + new Date().toLocaleDateString(undefined, {
       year: "numeric", month: "short", day: "numeric",
     }),

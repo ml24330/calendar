@@ -22,6 +22,15 @@
 
 export const CALENDAR_TZ = "America/Los_Angeles";
 
+/* How the zone is labelled in the interface.
+   "PT" rather than PDT/PST on purpose: the generic name is correct all year,
+   so nothing has to work out which side of a daylight-saving change a given
+   view falls on. A month view sits on one side, a year view spans both, and
+   the masthead covers whatever you happen to be looking at — there is no
+   single date for a specific abbreviation to be computed from. The times
+   themselves still convert with the real offset for each instant. */
+export const ZONE_LABEL = "PT";
+
 const PARTS = new Intl.DateTimeFormat("en-US", {
   timeZone: CALENDAR_TZ,
   hour12: false,
@@ -98,7 +107,8 @@ export const zoned = (iso) => toZoned(new Date(iso));
 /** "Now", on the calendar's clock. */
 export const zonedNow = () => toZoned(new Date());
 
-/** "PDT" or "PST", for labelling times so travellers aren't misled. */
+/** "PDT" or "PST" for a specific instant. Not used in the interface — see
+    ZONE_LABEL above — but kept for anywhere a single moment needs naming. */
 export function zoneAbbr(instant = new Date()) {
   const part = ABBR.formatToParts(instant).find((p) => p.type === "timeZoneName");
   return part ? part.value : "";

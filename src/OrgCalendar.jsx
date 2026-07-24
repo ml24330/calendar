@@ -3,10 +3,10 @@ import {
   MONTHS, MON_ABBR, DAY_ABBR, addDays, addMonths, startOfDay, startOfWeek, slug,
 } from "./lib/dates.js";
 import { expandDays, readableOn } from "./lib/layout.js";
-import { toZoned, fromZoned, zonedNow, zoneAbbr, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
+import { toZoned, fromZoned, zonedNow, ZONE_LABEL, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
 import { downloadICS } from "./lib/ics.js";
 import * as api from "./lib/api.js";
-import { ORG_NAME } from "./config.js";
+import { ORG_NAME, CUR_YEAR } from "./config.js";
 import { YearPlanner, MonthGrid, TimeGrid } from "./components/views.jsx";
 import {
   EventDetail, EventForm, TagManager, AuthDialog, SubscribeHelp,
@@ -246,7 +246,7 @@ export default function OrgCalendar() {
       <header className="masthead">
         <div className="mark">
           <b>{ORG_NAME}</b>
-          <span>all times {zoneAbbr()}</span>
+          <span>{CUR_YEAR}–{CUR_YEAR + 1}</span>
         </div>
         <input
           className="search mono"
@@ -352,7 +352,7 @@ export default function OrgCalendar() {
           <p className="note">
             Keys: <span className="mono">←</span> <span className="mono">→</span> to move,
             <span className="mono"> T</span> for today, <span className="mono">Y M W D</span> to
-            switch views.
+            switch views. All times are in {ZONE_LABEL}.
           </p>
         </aside>
 
@@ -366,7 +366,7 @@ export default function OrgCalendar() {
           {viewerIsElsewhere() && (
             <div className="banner">
               Your device is on a different clock. Every time here is shown in{" "}
-              {zoneAbbr()} ({CALENDAR_TZ.split("/")[1].replace("_", " ")}), not your local time.
+              {ZONE_LABEL} ({CALENDAR_TZ.split("/")[1].replace("_", " ")}), not your local time.
               Events you add to your own calendar will convert automatically.
             </div>
           )}

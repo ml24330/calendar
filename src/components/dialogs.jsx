@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { startOfDay, toInput, toDateInput, fmtLongDate, fmtRange, slug } from "../lib/dates.js";
 import { downloadICS, googleUrl } from "../lib/ics.js";
 import { tint } from "../lib/layout.js";
-import { toZoned, fromZoned, zoneAbbr } from "../lib/tz.js";
+import { toZoned, fromZoned, ZONE_LABEL } from "../lib/tz.js";
 
 const TAG_COLORS = [
   "#2F6FE0", "#00857A", "#B4530A", "#7A3EA8",
@@ -232,12 +232,12 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
 
         <div className="two">
           <div className="field">
-            <label className="eyebrow" htmlFor="f-start">Starts ({zoneAbbr()})</label>
+            <label className="eyebrow" htmlFor="f-start">Starts ({ZONE_LABEL})</label>
             <input id="f-start" className="inp mono" type={f.allDay ? "date" : "datetime-local"}
               value={f.startIn} onChange={(e) => set("startIn", e.target.value)} />
           </div>
           <div className="field">
-            <label className="eyebrow" htmlFor="f-end">Ends ({zoneAbbr()})</label>
+            <label className="eyebrow" htmlFor="f-end">Ends ({ZONE_LABEL})</label>
             <input id="f-end" className="inp mono" type={f.allDay ? "date" : "datetime-local"}
               value={f.endIn} onChange={(e) => set("endIn", e.target.value)} />
           </div>
