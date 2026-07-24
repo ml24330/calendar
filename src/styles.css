@@ -403,3 +403,79 @@ textarea.inp { min-height: 78px; resize: vertical; }
 @media (prefers-reduced-motion: reduce) {
   .tag-check, .tag-check svg path { transition: none; }
 }
+
+/* ---- search typeahead ----------------------------------------------------
+   The search box still filters the calendar; this is a shortcut to jump
+   straight to a match rather than paging through months to find it. */
+.search-wrap { position: relative; }
+
+.search-hits {
+  position: absolute;
+  top: calc(100% + 6px);
+  /* Anchored to the right edge of the input, not the left. The search box sits
+     near the right of the masthead, so a panel wider than the input has room
+     to grow leftwards and none to grow rightwards. */
+  right: 0;
+  left: auto;
+  width: 360px;
+  max-width: calc(100vw - 40px);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--rule);
+  border-radius: var(--r);
+  box-shadow: 0 14px 34px rgba(23, 32, 58, .3);
+  z-index: 70;
+}
+.search-hits li { margin: 0; }
+
+.hit {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  background: none;
+  border-radius: 2px;
+  text-align: left;
+  color: var(--ink);
+  font-size: 13px;
+}
+.hit.on { background: var(--paper); }
+
+.hit-when {
+  flex: none;
+  width: 96px;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.hit-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hit-draft {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #7A6410;
+  background: #FDF6E3;
+  border: 1px dashed #D9B84C;
+  border-radius: 2px;
+  padding: 0 4px;
+  margin-right: 6px;
+}
+
+/* Below this width the masthead wraps and the search box moves to the left,
+   so right-anchoring would push the panel off the other edge. Give the search
+   its own full-width row and let the panel match it. */
+@media (max-width: 720px) {
+  .search-wrap { flex: 1 1 100%; order: 3; }
+  .search { width: 100%; }
+  .search-hits { left: 0; right: 0; width: auto; max-width: none; }
+}

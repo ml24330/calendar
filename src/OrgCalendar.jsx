@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   MONTHS, MON_ABBR, DAY_ABBR, addDays, addMonths, startOfDay, startOfWeek, slug,
+  fmtTime,
 } from "./lib/dates.js";
 import { expandDays, readableOn } from "./lib/layout.js";
 import { toZoned, fromZoned, zonedNow, ZONE_LABEL, ZONE_NAME, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
@@ -27,6 +28,8 @@ export default function OrgCalendar() {
   const [query, setQuery] = useState("");
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchIndex, setSearchIndex] = useState(0);
   const [now, setNow] = useState(() => zonedNow());
 
   const dialogRef = useRef(null);
@@ -166,6 +169,59 @@ export default function OrgCalendar() {
 
   const draftCount = useMemo(() => events.filter((e) => !e.published).length, [events]);
 
+  /* Typeahead results. Drawn from the same set the calendar is showing, so
+     the list and the grid can never disagree.
+     Ordered by distance from today in either direction: what you are looking
+     for is usually near now, and whether it is just behind or just ahead is
+     not something the search box can know. Measured in whole days, so an
+     all-day event today ranks with everything else today rather than being
+     pushed back by its midnight start. */
+  const searchHits = useMemo(() => {
+    if (query.trim().length < 2) return [];
+    const DAY = 86400000;
+    const today = startOfDay(zonedNow()).getTime();
+    return visible
+      .map((ev) => {
+        const at = toZoned(ev.start);
+        const day = startOfDay(at).getTime();
+        return { ev, day, at: at.getTime(), away: Math.abs(day - today) / DAY };
+      })
+      .sort((a, b) =>
+        a.away - b.away ||   // nearest first
+        b.day - a.day ||     // a tie is one ahead and one behind: prefer ahead
+        a.at - b.at          // same day: earlier in the day first
+      )
+      .slice(0, 6)
+      .map((x) => x.ev);
+  }, [visible, query]);
+
+  useEffect(() => { setSearchIndex(0); }, [query]);
+
+  /* Jump the calendar to the event and open it. Navigating as well as opening
+     means closing the dialog leaves you somewhere useful rather than back
+     where you started. */
+  const pickHit = (ev) => {
+    setCursor(toZoned(ev.start));
+    setDialog({ kind: "detail", ev });
+    setSearchOpen(false);
+  };
+
+  const onSearchKey = (e) => {
+    if (e.key === "Escape") { setSearchOpen(false); return; }
+    if (!searchHits.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setSearchOpen(true);
+      setSearchIndex((i) => (i + 1) % searchHits.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setSearchIndex((i) => (i - 1 + searchHits.length) % searchHits.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      pickHit(searchHits[searchIndex] || searchHits[0]);
+    }
+  };
+
   /* ---------------------------------------------------------- navigation */
 
   const step = useCallback((dir) => {
@@ -250,13 +306,48 @@ export default function OrgCalendar() {
           <b>{ORG_NAME}</b>
           <span>{CUR_YEAR}–{CUR_YEAR + 1}</span>
         </div>
-        <input
-          className="search mono"
-          placeholder="Search events"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          aria-label="Search events"
-        />
+        <div className="search-wrap">
+          <input
+            className="search mono"
+            placeholder="Search events"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setSearchOpen(true); }}
+            onFocus={() => setSearchOpen(true)}
+            /* Let a click on a result land before the list disappears. */
+            onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
+            onKeyDown={onSearchKey}
+            aria-label="Search events"
+            aria-expanded={searchOpen && searchHits.length > 0}
+            aria-autocomplete="list"
+          />
+          {searchOpen && searchHits.length > 0 && (
+            <ul className="search-hits" role="listbox">
+              {searchHits.map((ev, i) => {
+                const d = toZoned(ev.start);
+                const tag = tagsById[ev.tagId];
+                return (
+                  <li key={ev.id} role="option" aria-selected={i === searchIndex}>
+                    <button
+                      className={"hit" + (i === searchIndex ? " on" : "")}
+                      onMouseDown={(e) => { e.preventDefault(); pickHit(ev); }}
+                      onMouseEnter={() => setSearchIndex(i)}
+                    >
+                      <span className="hit-when mono">
+                        {MON_ABBR[d.getMonth()]} {d.getDate()}
+                        {!ev.allDay && <> · {fmtTime(d)}</>}
+                      </span>
+                      <span className="hit-title">
+                        {!ev.published && <span className="hit-draft">draft</span>}
+                        {ev.title}
+                      </span>
+                      {tag && <span className="swatch" style={{ background: tag.color }} />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
         <button
           className={"lock" + (admin ? " on" : "")}
           onClick={() => (admin ? lock() : setDialog({ kind: "auth" }))}
