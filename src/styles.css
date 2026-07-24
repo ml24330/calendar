@@ -192,6 +192,17 @@ input, textarea, select { font: inherit; color: inherit; }
   display: flex; flex-direction: column; gap: 2px;
 }
 .tg-scroll { overflow-y: auto; flex: 1; }
+
+/* The day headers and all-day row live inside the scroller so they share its
+   content width — otherwise a classic scrollbar narrows the grid alone and the
+   columns stop lining up. Sticky pins them while the hours scroll underneath.
+   z-index sits above the now-line (5) and the event blocks. */
+.tg-head {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  background: var(--card);
+}
 .tg-grid { display: grid; position: relative; }
 .tg-gutter { border-right: 1px solid var(--rule-soft); position: relative; }
 .tg-hr {

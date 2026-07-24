@@ -167,51 +167,60 @@ export function TimeGrid({ days, byDay, tagsById, onOpen, now, onPickDay }) {
 
   return (
     <div className="tg-wrap">
-      <div className="tg-top" style={{ gridTemplateColumns: cols }}>
-        <div className="gut" />
-        {days.map((d) => (
-          <button
-            key={key(d)}
-            className={"tg-day" + (isToday(d) ? " now" : "")}
-            onClick={() => onPickDay(d)}
-          >
-            <div className="eyebrow">{DAY_ABBR[d.getDay()]}</div>
-            <div className="d">{d.getDate()}</div>
-          </button>
-        ))}
-      </div>
-
-      {hasAllDay && (
-        <div className="tg-allday" style={{ gridTemplateColumns: cols }}>
-          <div className="gut"><span className="eyebrow">All day</span></div>
+      {/* Header, all-day row and time grid must share one content box.
+          With the headers outside the scroller, a classic scrollbar —
+          Windows, and therefore Edge — took ~16px off the grid alone, so
+          its columns drifted left of the headers. macOS overlay
+          scrollbars occupy no width, which is why it looks right there.
+          Sticky keeps the header pinned while every grid measures
+          against the same width. */}
+      <div className="tg-scroll" ref={scroller}>
+        <div className="tg-head">
+        <div className="tg-top" style={{ gridTemplateColumns: cols }}>
+          <div className="gut" />
           {days.map((d) => (
-            <div key={key(d)} className="col">
-              {(byDay.get(key(d)) || []).filter((e) => e.allDay).map((ev) => {
-                const c = (tagsById[ev.tagId] || {}).color || "#9AA2BC";
-                return (
-                  <button
-                    key={ev.id}
-                    className={"chip" + (ev.published ? "" : " draft")}
-                    style={{ borderLeftColor: c, background: tint(c, ev.published ? 0.12 : 0.04) }}
-                    onClick={() => onOpen(ev)}
-                  >
-                    <span className="t">{ev.title}</span>
-                  </button>
-                );
-              })}
-            </div>
+            <button
+              key={key(d)}
+              className={"tg-day" + (isToday(d) ? " now" : "")}
+              onClick={() => onPickDay(d)}
+            >
+              <div className="eyebrow">{DAY_ABBR[d.getDay()]}</div>
+              <div className="d">{d.getDate()}</div>
+            </button>
           ))}
         </div>
-      )}
 
-      {!anyTimed && !hasAllDay && (
-        <div className="empty">
-          <b>Nothing scheduled</b>
-          Nothing on {days.length === 1 ? "this day" : "this week"} matches your filters.
+        {hasAllDay && (
+          <div className="tg-allday" style={{ gridTemplateColumns: cols }}>
+            <div className="gut"><span className="eyebrow">All day</span></div>
+            {days.map((d) => (
+              <div key={key(d)} className="col">
+                {(byDay.get(key(d)) || []).filter((e) => e.allDay).map((ev) => {
+                  const c = (tagsById[ev.tagId] || {}).color || "#9AA2BC";
+                  return (
+                    <button
+                      key={ev.id}
+                      className={"chip" + (ev.published ? "" : " draft")}
+                      style={{ borderLeftColor: c, background: tint(c, ev.published ? 0.12 : 0.04) }}
+                      onClick={() => onOpen(ev)}
+                    >
+                      <span className="t">{ev.title}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!anyTimed && !hasAllDay && (
+          <div className="empty">
+            <b>Nothing scheduled</b>
+            Nothing on {days.length === 1 ? "this day" : "this week"} matches your filters.
+          </div>
+        )}
+
         </div>
-      )}
-
-      <div className="tg-scroll" ref={scroller}>
         <div className="tg-grid" style={{ gridTemplateColumns: cols, height: 24 * HOUR_H }}>
           <div className="tg-gutter">
             {Array.from({ length: 23 }, (_, i) => i + 1).map((h) => (
