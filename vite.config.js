@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { handle } from "./server/api.js";
+import { ORG_NAME } from "./src/config.js";
 
 /* The API lives in server/. It's mounted with a direct middlewares.use(),
    which installs it AHEAD of Vite's internal stack — if it went after,
@@ -22,8 +23,18 @@ function calendarApi() {
   };
 }
 
+/* The tab title is static HTML, so it can't read React state. Injecting it at
+   build time means it's correct before a single byte of JS runs, and there's
+   still only one place to edit. */
+function pageTitle() {
+  return {
+    name: "org-calendar-title",
+    transformIndexHtml: (html) => html.replace("<!--org-name-->", ORG_NAME),
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), calendarApi()],
+  plugins: [react(), calendarApi(), pageTitle()],
   server: {
     port: 5173,
     // true to let other machines on your network reach it

@@ -6,6 +6,7 @@ import { expandDays, readableOn } from "./lib/layout.js";
 import { toZoned, fromZoned, zonedNow, zoneAbbr, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
 import { downloadICS } from "./lib/ics.js";
 import * as api from "./lib/api.js";
+import { ORG_NAME } from "./config.js";
 import { YearPlanner, MonthGrid, TimeGrid } from "./components/views.jsx";
 import {
   EventDetail, EventForm, TagManager, AuthDialog, SubscribeHelp,
@@ -14,7 +15,6 @@ import {
 export default function OrgCalendar() {
   const [ready, setReady] = useState(false);
   const [offline, setOffline] = useState(false);
-  const [orgName, setOrgName] = useState("Org Calendar");
   const [claimed, setClaimed] = useState(true);
   const [admin, setAdmin] = useState(false);
   const [tags, setTags] = useState([]);
@@ -34,7 +34,6 @@ export default function OrgCalendar() {
 
   const refresh = useCallback(async () => {
     const data = await api.bootstrap();
-    setOrgName(data.orgName);
     setClaimed(data.claimed);
     setAdmin(data.admin);
     setTags(data.tags);
@@ -87,7 +86,7 @@ export default function OrgCalendar() {
         });
       } else if (err.status === 401) {
         setAdmin(false);
-        setNotice({ kind: "error", text: "Your editing session expired. Unlock again to keep going." });
+        setNotice({ kind: "error", text: "Your editing session expired. Log in again to keep going." });
       } else {
         setNotice({ kind: "error", text: err.message });
       }
@@ -113,17 +112,18 @@ export default function OrgCalendar() {
     if (await run(() => api.saveTags(next), "Tags saved.")) setDialog(null);
   };
 
+
   const unlock = async (passphrase) => {
     await api.login(passphrase);
     await refresh();
     setDialog(null);
-    setNotice({ kind: "ok", text: "Editing unlocked. Drafts are visible to you now." });
+    setNotice({ kind: "ok", text: "Logged in. Drafts are visible to you now." });
   };
 
   const lock = async () => {
     await api.logout();
     await refresh();
-    setNotice({ kind: "ok", text: "Locked." });
+    setNotice({ kind: "ok", text: "Logged out." });
   };
 
   /* ------------------------------------------------------------- derived */
@@ -245,8 +245,8 @@ export default function OrgCalendar() {
     <>
       <header className="masthead">
         <div className="mark">
-          <b>{orgName}</b>
-          <span>2026-2027 · all times {zoneAbbr()}</span>
+          <b>{ORG_NAME}</b>
+          <span>all times {zoneAbbr()}</span>
         </div>
         <input
           className="search mono"
@@ -322,11 +322,12 @@ export default function OrgCalendar() {
                 <p className="note" style={{ margin: 0 }}>
                   {draftCount === 0
                     ? "Nothing unpublished right now."
-                    : `${draftCount} unpublished. Only people who unlock editing can see ${draftCount === 1 ? "it" : "them"}; the feed, the downloads and the PDF leave ${draftCount === 1 ? "it" : "them"} out for everyone else.`}
+                    : `${draftCount} unpublished. Only people logged in to edit can see ${draftCount === 1 ? "it" : "them"}; the feed, the downloads and the PDF leave ${draftCount === 1 ? "it" : "them"} out for everyone else.`}
                 </p>
               </div>
             </section>
           )}
+
 
           <section className="panel">
             <div className="panel-h"><span className="eyebrow">Export</span></div>
@@ -338,7 +339,7 @@ export default function OrgCalendar() {
                 A printable {view} sheet plus full details, matching your filters.
               </p>
               <button className="btn wide"
-                onClick={() => downloadICS(visible, tagsById, orgName, exportName())}>
+                onClick={() => downloadICS(visible, tagsById, ORG_NAME, exportName())}>
                 Download {visible.length} event{visible.length === 1 ? "" : "s"} (.ics)
               </button>
               <button className="more" style={{ marginTop: 10 }}
@@ -374,7 +375,7 @@ export default function OrgCalendar() {
           )}
           {!claimed && !admin && !offline && (
             <div className="banner">
-              Nobody has claimed this calendar yet. Choose “Unlock editing” to set the
+              Nobody has claimed this calendar yet. Choose “Log in to edit” to set the
               passphrase and become its editor.
             </div>
           )}

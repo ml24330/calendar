@@ -9,6 +9,7 @@ import { hashPassphrase, verifyPassphrase, newToken, tokenFrom } from "./auth.js
 import { renderCalendarPdf } from "./pdf.js";
 import { buildICS } from "../src/lib/ics.js";
 import { slug, periodRange } from "../src/lib/dates.js";
+import { ORG_NAME } from "../src/config.js";
 
 const json = (res, code, body) => {
   res.statusCode = code;
@@ -103,7 +104,6 @@ export async function handle(req, res, next) {
     if (p === "/api/bootstrap" && req.method === "GET") {
       const admin = isAdmin(req, url);
       return json(res, 200, {
-        orgName: db.getMeta("orgName") || "Org Calendar",
         claimed: !!db.getMeta("adminHash"),
         admin,
         tags: db.listTags(),
@@ -142,7 +142,7 @@ export async function handle(req, res, next) {
 
     /* ---- writes: all admin-only ---- */
     if (p === "/api/events" && req.method === "POST") {
-      if (!isAdmin(req, url)) return json(res, 401, { error: "Unlock editing first." });
+      if (!isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
       const body = await readBody(req);
       return json(res, 201, db.createEvent(validateEvent(body)));
     }
@@ -150,7 +150,7 @@ export async function handle(req, res, next) {
     const eventMatch = p.match(/^\/api\/events\/([\w-]+)$/);
     if (eventMatch) {
       const id = eventMatch[1];
-      if (!isAdmin(req, url)) return json(res, 401, { error: "Unlock editing first." });
+      if (!isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
 
       if (req.method === "PATCH") {
         const body = await readBody(req);
@@ -173,8 +173,9 @@ export async function handle(req, res, next) {
       }
     }
 
+
     if (p === "/api/tags" && req.method === "PUT") {
-      if (!isAdmin(req, url)) return json(res, 401, { error: "Unlock editing first." });
+      if (!isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
       const body = await readBody(req);
       if (!Array.isArray(body.tags)) return json(res, 400, { error: "Expected { tags: [] }" });
       for (const t of body.tags) {
@@ -190,7 +191,7 @@ export async function handle(req, res, next) {
       const admin = isAdmin(req, url);
       const tags = db.listTags();
       let events = db.listEvents({ includeDrafts: admin });
-      let name = db.getMeta("orgName") || "Org Calendar";
+      let name = ORG_NAME;
 
       const wanted = url.searchParams.get("tag");
       if (wanted) {
@@ -244,7 +245,7 @@ export async function handle(req, res, next) {
         );
       }
 
-      const orgName = db.getMeta("orgName") || "Org Calendar";
+      const orgName = ORG_NAME;
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `inline; filename="${slug(orgName + " " + label)}.pdf"`);

@@ -175,7 +175,6 @@ Service by hand:
 | `ADMIN_PASSPHRASE` | **yes** | claims the calendar at boot. Change it to rotate; that revokes every session |
 | `DATA_DIR` | **yes** | where `calendar.db` lives. Must be the disk mount path |
 | `NODE_VERSION` | yes | 22.5+ for built-in SQLite. Pinned in `.node-version` too |
-| `ORG_NAME` | no | the name in the masthead |
 | `PORT` | no | Render sets this |
 
 ### The disk is not optional
@@ -268,6 +267,21 @@ parts (`zonedParts` is exported for that), or waiting for `Temporal`.
 
 To move the calendar to another campus, change `CALENDAR_TZ` and run
 `npm test`.
+
+## Renaming the calendar
+
+Edit `ORG_NAME` in `src/config.js`, commit, deploy. That one constant feeds the
+masthead, the browser tab, the `.ics` calendar name and the PDF header.
+
+It is deliberately not an environment variable and not a database row. Both of
+those meant the name could disagree with the code, and left you asking whether
+a stale value was coming from the dashboard, a blueprint that hadn't synced, or
+a row written months ago. A constant in the repo is greppable, diffable, and
+wrong in only one place if it's wrong.
+
+The tab title is static HTML and can't read React state, so Vite injects it at
+build time from the same constant — correct before any JS runs, still only one
+place to edit.
 
 ## Odds and ends
 

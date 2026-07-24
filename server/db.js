@@ -79,12 +79,12 @@ export function open() {
   db = new DatabaseSync(DB_FILE);
   db.exec(SCHEMA);
 
-  if (!getMeta("orgName")) {
-    setMeta("orgName", process.env.ORG_NAME || "Org Calendar");
+  // The calendar's name is a constant in src/config.js, not a stored value,
+  // so "seeded" is what marks a database as initialised.
+  if (!getMeta("seeded")) {
+    setMeta("seeded", new Date().toISOString());
     seed();
     console.log(`\n  [org-calendar] created ${DB_FILE} with sample events\n`);
-  } else if (process.env.ORG_NAME && getMeta("orgName") !== process.env.ORG_NAME) {
-    setMeta("orgName", process.env.ORG_NAME);
   }
 
   applyEnvPassphrase();

@@ -258,7 +258,7 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
           <div className="field">
             <label className="eyebrow" htmlFor="f-ce">Contact email</label>
             <input id="f-ce" className="inp" type="email" value={f.contactEmail}
-              onChange={(e) => set("contactEmail", e.target.value)} placeholder="john.doe@stanford.edu" />
+              onChange={(e) => set("contactEmail", e.target.value)} placeholder="johndoe@stanford.edu" />
           </div>
         </div>
 
@@ -287,7 +287,7 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
         </button>
         <button className="btn" onClick={onClose} style={{ marginLeft: "auto" }}>Cancel</button>
         <p className="note" style={{ width: "100%", margin: "6px 0 0" }}>
-          A draft is visible only to people who unlock editing. It stays out of the calendar
+          A draft is visible only to people logged in to edit. It stays out of the calendar
           feed, the .ics downloads and the PDF until you publish it.
         </p>
       </div>
@@ -377,7 +377,7 @@ export function AuthDialog({ claimed, onClose, onSubmit }) {
       <div className="dlg-b">
         <p className="note" style={{ marginTop: 0 }}>
           {claimed
-            ? "Enter the passphrase your calendar owner shared with you. Unlocking also shows unpublished events."
+            ? "Enter the passphrase your calendar owner shared with you. Logging in also shows unpublished events."
             : "Nobody has claimed this calendar yet. Choose a passphrase and share it with whoever should be able to add and edit events."}
         </p>
         <div className="field">
@@ -402,7 +402,7 @@ export function AuthDialog({ claimed, onClose, onSubmit }) {
       </div>
       <div className="dlg-f">
         <button className="btn primary" disabled={busy} onClick={go}>
-          {busy ? "Checking…" : claimed ? "Unlock" : "Set passphrase"}
+          {busy ? "Checking…" : claimed ? "Log in" : "Set passphrase"}
         </button>
         <button className="btn" onClick={onClose}>Cancel</button>
       </div>
@@ -447,26 +447,14 @@ export function SubscribeHelp({ tags, admin, onClose }) {
           );
         })}
 
-        {/* {admin && (
+        {admin && (
           <p className="banner" style={{ marginTop: 16 }}>
             Adding <span className="mono">?token=…</span> to a feed URL includes your drafts.
             Anyone holding that URL sees them, and calendar apps store it in plain text — so
             treat it as a password, not a link to paste in chat.
           </p>
-        )} */}
+        )}
 
-        {/* <p className="eyebrow" style={{ marginTop: 18, marginBottom: 6 }}>Apple Calendar</p>
-        <p className="note" style={{ marginTop: 0 }}>
-          File → New Calendar Subscription, paste the URL. It accepts localhost, so this works
-          while you're testing.
-        </p>
-
-        <p className="eyebrow" style={{ marginTop: 14, marginBottom: 6 }}>Google Calendar and Outlook</p>
-        <p className="note" style={{ marginTop: 0, marginBottom: 0 }}>
-          Other calendars → From URL, or Add calendar → Subscribe from web. Both fetch from
-          their own servers, so they need a public address — localhost won't reach them. Use
-          the download button while testing, or expose the port with a tunnel.
-        </p> */}
       </div>
       <div className="dlg-f">
         <button className="btn" onClick={onClose}>Close</button>
