@@ -1,0 +1,300 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{charter}
+\usepackage[scaled=0.92]{helvet}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{cardinal}{HTML}{8C1515}
+\definecolor{ink}{HTML}{17203A}
+\definecolor{muted}{HTML}{737C99}
+\definecolor{rule}{HTML}{D5D9E5}
+\definecolor{panel}{HTML}{F4F5F9}
+
+\hypersetup{colorlinks=true, urlcolor=cardinal, linkcolor=cardinal}
+
+\titleformat{\section}{\large\bfseries\color{cardinal}}{\thesection.}{0.6em}{}
+\titlespacing*{\section}{0pt}{1.6em}{0.5em}
+\titleformat{\subsection}{\normalsize\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+\titlespacing*{\subsection}{0pt}{1.1em}{0.3em}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\fancyfoot[L]{\footnotesize\color{muted} Economics Social Calendar — user and maintainer guide}
+\fancyfoot[R]{\footnotesize\color{muted}\thepage}
+
+\setlist[itemize]{leftmargin=1.2em, itemsep=2pt, topsep=3pt}
+\setlist[enumerate]{leftmargin=1.4em, itemsep=3pt, topsep=3pt}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+\begin{document}
+
+\begin{flushleft}
+{\footnotesize\color{muted}\MakeUppercase{Stanford Department of Economics}}\\[0.2em]
+{\LARGE\bfseries\color{ink} Economics Social Calendar}\\[0.4em]
+{\color{muted} User and maintainer guide}
+\end{flushleft}
+
+\vspace{0.3em}
+{\color{cardinal}\hrule height 1.2pt}
+\vspace{1.2em}
+
+\section{What this is}
+
+A shared web calendar for the Department of Economics. Anyone with the link can
+see the social events happening in the department — seminars, receptions, happy
+hours, visiting speakers — without logging in. People can subscribe to it from
+their own calendar app, so events appear alongside their normal schedule and
+update on their own.
+
+Adding, changing and removing events requires a passphrase. Only a handful of
+people need it.
+
+All times are shown in Pacific Time no matter where the reader is.
+
+\section{Using the calendar}
+
+\subsection{Finding things}
+
+Switch between \textbf{Year}, \textbf{Month}, \textbf{Week} and \textbf{Day}
+with the buttons at the top right. The year view is laid out like a printed
+wall planner, with months across and days down, which is the quickest way to
+see how a term is filling up. Clicking any day opens it.
+
+Keyboard shortcuts: \code{$\leftarrow$} and \code{$\rightarrow$} move back and
+forward, \code{T} jumps to today, and \code{Y} \code{M} \code{W} \code{D}
+switch views. The search box filters by title, location, details or contact.
+
+\subsection{Tags}
+
+Every event has a colour-coded tag. Click a tag in the sidebar to hide it, and
+click again to bring it back. A tick in the box means the tag is showing.
+Everything else on the page follows the filter, including the exports.
+
+\subsection{Getting events into your own calendar}
+
+Three options, in the sidebar:
+
+\begin{itemize}
+  \item \textbf{Subscribe} to a live feed. Your calendar app re-checks the
+        address on its own, so new and changed events arrive without you doing
+        anything. Choose the whole calendar or a single tag. This is the option
+        most people want.
+  \item \textbf{Download} an \code{.ics} file of whatever is on screen. Filter
+        to one tag first and you get only that tag. This is a one-time copy: it
+        will not update later.
+  \item \textbf{Add to Google Calendar} from inside a single event, for when
+        you only want that one thing.
+\end{itemize}
+
+\subsection{Printing}
+
+The Export panel produces a PDF of the view you are looking at — a wall planner
+for a year, a grid for a month or week, an agenda for a day — followed by the
+full details of every event in that period. Whatever you have filtered out
+stays out of the PDF.
+
+\section{Adding and changing events}
+
+Click \textbf{Log in to edit} at the top right and enter the passphrase. You
+stay logged in for twelve hours, or until you click \textbf{Log out}.
+
+Once logged in you can:
+
+\begin{itemize}
+  \item \textbf{Add event} — the button at the top of the sidebar.
+  \item \textbf{Edit} or \textbf{Remove} — open any event and use the buttons
+        at the bottom. Removing asks for confirmation.
+  \item \textbf{Manage tags} — rename them, change colours, add new ones or
+        remove them. Removing a tag does not delete its events; they simply
+        become untagged.
+  \item \textbf{Rename the calendar} is not done here — see
+        section~\ref{sec:changes}.
+\end{itemize}
+
+\subsection{Event fields}
+
+Title and the start and end times are required. Everything else is optional but
+worth filling in: location, point of contact and their email, details, and a
+link. The contact details appear in the event and travel with it into people's
+own calendars, so attendees know who to ask.
+
+Tick \textbf{All-day event} for something without a specific time, such as a
+deadline or a multi-day visit.
+
+\subsection{Drafts}
+
+The event form has two save buttons. \textbf{Add and publish} makes the event
+visible to everyone. \textbf{Save as draft} keeps it visible only to people
+logged in to edit — it stays out of the feed, the downloads and the PDF.
+
+Use a draft when a date or venue is not confirmed. Drafts appear hatched and
+labelled in the calendar so they are hard to confuse with real events. Publish
+one later by opening it and clicking \textbf{Publish}.
+
+\subsection{If two people edit at once}
+
+If someone else saved a change while you had the same event open, your save is
+refused and their version is loaded instead, with a message explaining what
+happened. Make your change again on top of theirs. Nothing is lost silently.
+
+\section{How it is put together}
+
+Four services, all free, currently registered under the maintainer's personal
+account.
+
+\vspace{0.4em}
+\begin{center}
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}p{7.6cm}@{}}
+\toprule
+\textbf{Service} & \textbf{Role} & \textbf{Notes} \\
+\midrule
+GitHub & Holds the code & Render deploys automatically whenever the main branch changes. \\
+Render & Runs the website & Free tier. Sleeps after 15 minutes of no traffic and takes up to a minute to wake. \\
+Turso & Stores the events & A hosted SQLite database. Nothing is stored on Render itself, so deploys never affect the data. \\
+UptimeRobot & Keeps it awake & Requests the site every 10 minutes so it does not sleep, and emails if the site goes down. \\
+\bottomrule
+\end{tabular}
+\end{center}
+\vspace{0.4em}
+
+The separation that matters: \textbf{the events live in Turso, not on Render}.
+Redeploying, restarting or rebuilding the website cannot lose them.
+
+\section{Handing this over}
+\label{sec:handover}
+
+If maintenance moves to someone else, they will need their own accounts. The
+data can be copied across; nothing is tied to the original owner except the
+accounts themselves.
+
+\begin{enumerate}
+  \item \textbf{Take the code.} Fork or clone the GitHub repository into an
+        account the new maintainer controls.
+
+  \item \textbf{Create a database on Turso.} Sign up, install the CLI, then:
+        \begin{quote}
+        \code{turso db create econ-calendar}\\
+        \code{turso db show econ-calendar -{}-url}\\
+        \code{turso db tokens create econ-calendar}
+        \end{quote}
+        Keep the URL and the token. To carry the existing events across, ask
+        the outgoing maintainer for a dump
+        (\code{turso db shell <old-db> ".dump" > backup.sql}) and load it into
+        the new database.
+
+  \item \textbf{Create the web service on Render.} Connect the repository and
+        set:
+        \begin{quote}
+        Build command: \code{npm ci \&\& npm run build}\\
+        Start command: \code{npm start}\\
+        Health check path: \code{/healthz}
+        \end{quote}
+        Then add exactly three environment variables:
+        \begin{quote}
+        \code{TURSO\_DATABASE\_URL} — from step 2\\
+        \code{TURSO\_AUTH\_TOKEN} — from step 2\\
+        \code{ADMIN\_PASSPHRASE} — the editing passphrase, at least 8 characters
+        \end{quote}
+        The service refuses to start without the first of these, rather than
+        quietly running against a database that would be wiped on the next
+        deploy. Changing \code{ADMIN\_PASSPHRASE} later rotates the passphrase
+        and logs everyone out.
+
+  \item \textbf{Set up UptimeRobot.} Add an HTTP monitor pointing at
+        \code{https://<your-site>/healthz}, checking every 10 minutes, with an
+        alert to the new maintainer's email. Without this the site sleeps and
+        the first visitor each morning waits about a minute.
+
+  \item \textbf{Check it worked.} Open \code{/healthz} in a browser. It should
+        report:
+        \begin{quote}
+        \code{"remote": true}\quad and\quad \code{"persistent": true}
+        \end{quote}
+        Then log in, add a test event, redeploy, and confirm the event is still
+        there. That last step is the one that actually proves the setup is
+        sound.
+\end{enumerate}
+
+\subsection{Keeping an eye on the free tiers}
+
+None of the four services costs anything at the department's scale, but the
+limits are worth knowing:
+
+\begin{itemize}
+  \item \textbf{Render} allows 750 instance-hours a month per workspace. Keeping
+        one site awake around the clock uses almost all of it, so avoid running
+        a second free service in the same workspace.
+  \item \textbf{Turso} allows 500 million database rows read a month. Normal
+        departmental use is a small fraction of that.
+  \item \textbf{Free tiers change.} If the site starts sleeping or refusing to
+        load, check whether a limit was reached before assuming something broke.
+\end{itemize}
+
+Paying roughly \$7 a month for Render removes the sleeping behaviour entirely
+and makes UptimeRobot optional.
+
+\section{Making changes to the calendar itself}
+\label{sec:changes}
+
+A few things are set in the code rather than in the website, because they
+change once a year at most. Edit the file, commit, and Render redeploys.
+
+\vspace{0.4em}
+\begin{center}
+\small
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.2cm}>{\raggedright\arraybackslash}p{8.2cm}@{}}
+\toprule
+\textbf{To change} & \textbf{Edit} \\
+\midrule
+The calendar's name & \code{ORG\_NAME} in \code{src/config.js} \\
+The academic year in the header & \code{CUR\_YEAR} in \code{src/config.js} \\
+The timezone & \code{CALENDAR\_TZ} in \code{src/lib/tz.js} \\
+The icon in the browser tab & \code{public/favicon.svg} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Backups}
+
+The events live in one hosted database. To take a copy:
+
+\begin{quote}
+\code{turso db shell econ-calendar ".dump" > backup-\$(date +\%F).sql}
+\end{quote}
+
+Worth doing once a term, and before any handover. A rougher second copy is
+available by logging in and downloading the \code{.ics} file, which contains
+every event including drafts in a format any calendar can read.
+
+\section{Known limits}
+
+\begin{itemize}
+  \item \textbf{No repeating events.} A weekly seminar has to be entered as
+        separate events.
+  \item \textbf{One shared passphrase.} Everyone who can edit uses the same one,
+        and the calendar does not record who changed what. Share it narrowly.
+  \item \textbf{A feed link containing a token shows drafts.} Calendar apps
+        store such links in plain text, so treat one as a password rather than
+        something to paste into a group chat.
+\end{itemize}
+
+\vspace{1.4em}
+{\color{rule}\hrule height 0.6pt}
+\vspace{0.5em}
+{\footnotesize\color{muted} Source code and technical documentation are in the
+repository README.}
+
+\end{document}
