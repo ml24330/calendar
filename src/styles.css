@@ -447,7 +447,7 @@ textarea.inp { min-height: 78px; resize: vertical; }
 
 .hit-when {
   flex: none;
-  width: 96px;
+  width: 82px;   /* fits "Sep 30 2026"; the rest goes to the title */
   font-size: 10.5px;
   color: var(--muted);
 }

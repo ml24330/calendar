@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   MONTHS, MON_ABBR, DAY_ABBR, addDays, addMonths, startOfDay, startOfWeek, slug,
-  fmtTime,
 } from "./lib/dates.js";
 import { expandDays, readableOn } from "./lib/layout.js";
 import { toZoned, fromZoned, zonedNow, ZONE_LABEL, ZONE_NAME, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
@@ -332,9 +331,11 @@ export default function OrgCalendar() {
                       onMouseDown={(e) => { e.preventDefault(); pickHit(ev); }}
                       onMouseEnter={() => setSearchIndex(i)}
                     >
+                      {/* Date only, and always the year: a time would be blank
+                          for all-day events, and "Jul 24" is ambiguous once
+                          results span more than one year. */}
                       <span className="hit-when mono">
-                        {MON_ABBR[d.getMonth()]} {d.getDate()}
-                        {!ev.allDay && <> · {fmtTime(d)}</>}
+                        {MON_ABBR[d.getMonth()]} {d.getDate()} {d.getFullYear()}
                       </span>
                       <span className="hit-title">
                         {!ev.published && <span className="hit-draft">draft</span>}
