@@ -11,6 +11,17 @@ import { buildICS } from "../src/lib/ics.js";
 import { slug, periodRange } from "../src/lib/dates.js";
 import { ORG_NAME } from "../src/config.js";
 
+/* Thrown for input the client got wrong: empty title, end before start, and
+   so on. Everything the catch sees that ISN'T one of these is an unexpected
+   server fault, and must not be reported as if the caller mistyped. */
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+    this.expose = true; // safe to show this text to the client
+  }
+}
+
 const json = (res, code, body) => {
   res.statusCode = code;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -51,7 +62,7 @@ const MAX = { title: 300, location: 300, contactName: 200, contactEmail: 320, de
 
 function validateEvent(body, { partial = false } = {}) {
   const out = {};
-  const err = (m) => { throw new Error(m); };
+  const err = (m) => { throw new HttpError(400, m); };
 
   const str = (k, required) => {
     if (body[k] === undefined) {
@@ -158,6 +169,15 @@ export async function handle(req, res, next) {
       if (!await isAdmin(req, url)) return json(res, 401, { error: "Log in to edit first." });
       const body = await readBody(req);
       return json(res, 201, await db.createEvent(validateEvent(body)));
+    }
+
+    // Counting a view needs no auth — anyone who opens an event counts, and it
+    // can't change anything else. Kept ahead of the admin gate below so a
+    // logged-out reader's opens still register.
+    const viewMatch = p.match(/^\/api\/events\/([\w-]+)\/view$/);
+    if (viewMatch && req.method === "POST") {
+      await db.recordView(viewMatch[1]);
+      return json(res, 200, { ok: true });
     }
 
     const eventMatch = p.match(/^\/api\/events\/([\w-]+)$/);
@@ -274,7 +294,15 @@ export async function handle(req, res, next) {
       return res.end("Method not allowed");
     }
   } catch (err) {
-    return json(res, 400, { error: err.message });
+    // A validation error carries its own status and a message meant for the
+    // user. Anything else is a bug or an outage: log it with the method and
+    // path for debugging, and return a generic 500 so no internal detail —
+    // a stack, a database string — reaches the browser.
+    if (err instanceof HttpError && err.expose) {
+      return json(res, err.status, { error: err.message });
+    }
+    console.error(`  [api] ${req.method} ${req.url} failed:`, err);
+    return json(res, 500, { error: "Something went wrong on our end. Please try again." });
   }
 
   next();

@@ -68,7 +68,17 @@ export function EventDetail({ ev, tag, admin, onClose, onEdit, onDelete, onToggl
           </div>
           <h2 style={{ marginTop: 8 }}>{ev.title}</h2>
         </div>
-        <button className="x" onClick={onClose} aria-label="Close">×</button>
+        {/* Admin-only, and deliberately set apart from the event's own content:
+            top right, muted, small. It's a note about the event rather than
+            part of it, and no ordinary reader ever sees it. */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginLeft: "auto" }}>
+          {admin && (
+            <span className="view-count" title="Only visible when logged in to edit">
+              {ev.views ?? 0} {(ev.views ?? 0) === 1 ? "view" : "views"}
+            </span>
+          )}
+          <button className="x" onClick={onClose} aria-label="Close">×</button>
+        </div>
       </div>
 
       <div className="dlg-b">

@@ -110,6 +110,7 @@ async function connect() {
   }
 
   await client.executeMultiple(SCHEMA);
+  await migrate();
 
   if (!(await getMeta("seeded"))) {
     await setMeta("seeded", new Date().toISOString());
@@ -147,6 +148,21 @@ export async function close() {
     client.close();
   } catch { /* already gone */ }
   client = undefined;
+}
+
+/* Columns added after the first release. ALTER fails if the column is already
+   there, so the "duplicate column" case is treated as success — which makes
+   this safe to run on every boot, local or remote. Running against Turso
+   happens by itself on deploy, since open() uses whatever database is set. */
+async function migrate() {
+  const addColumn = async (sql) => {
+    try {
+      await client.execute(sql);
+    } catch (e) {
+      if (!/duplicate column/i.test(e.message || "")) throw e;
+    }
+  };
+  await addColumn("ALTER TABLE events ADD COLUMN views INTEGER NOT NULL DEFAULT 0");
 }
 
 const run = async (sql, args = []) => {
@@ -218,6 +234,7 @@ const toApi = (r) => ({
   details: r.details,
   link: r.link,
   version: Number(r.version),
+  views: Number(r.views ?? 0),
   updatedAt: r.updated_at,
 });
 
@@ -289,6 +306,10 @@ export async function updateEvent(id, patch, expectedVersion) {
     ]
   );
   return getEvent(id, { includeDrafts: true });
+}
+
+export async function recordView(id) {
+  await run("UPDATE events SET views = views + 1 WHERE id = ?", [id]);
 }
 
 export async function deleteEvent(id) {

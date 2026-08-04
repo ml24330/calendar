@@ -55,6 +55,10 @@ export class ApiError extends Error {
 
 export const bootstrap = () => call("/api/bootstrap");
 
+/* Fire-and-forget from the caller's side: a view is a vanity metric, so a
+   failed increment should never interrupt opening the event. */
+export const recordView = (id) => call(`/api/events/${id}/view`, { method: "POST" });
+
 export async function login(passphrase) {
   const { token } = await call("/api/session", { method: "POST", body: { passphrase } });
   setToken(token);

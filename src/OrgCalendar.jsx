@@ -46,6 +46,8 @@ export default function OrgCalendar() {
 
   useEffect(() => {
     refresh()
+      /* A failed load means the server is unreachable — the offline banner
+         says so on its own. The raw fetch message adds only noise. */
       .catch(() => setOffline(true))
       .finally(() => setReady(true));
   }, [refresh]);
@@ -168,6 +170,14 @@ export default function OrgCalendar() {
 
   const draftCount = useMemo(() => events.filter((e) => !e.published).length, [events]);
 
+  /* Every route into an event's detail goes through here, so a view is counted
+     once per open and nowhere is missed. Fire-and-forget: the count must never
+     delay the dialog or surface an error. */
+  const openEvent = useCallback((ev) => {
+    setDialog({ kind: "detail", ev });
+    api.recordView(ev.id).catch(() => {});
+  }, []);
+
   /* Typeahead results. Drawn from the same set the calendar is showing, so
      the list and the grid can never disagree.
      Ordered by distance from today in either direction: what you are looking
@@ -201,7 +211,7 @@ export default function OrgCalendar() {
      where you started. */
   const pickHit = (ev) => {
     setCursor(toZoned(ev.start));
-    setDialog({ kind: "detail", ev });
+    openEvent(ev);
     setSearchOpen(false);
   };
 
@@ -506,18 +516,18 @@ export default function OrgCalendar() {
             )}
             {view === "month" && (
               <MonthGrid cursor={cursor} byDay={byDay} tagsById={tagsById}
-                onOpen={(ev) => setDialog({ kind: "detail", ev })}
+                onOpen={openEvent}
                 onPickDay={(d) => { setCursor(d); setView("day"); }} />
             )}
             {view === "week" && (
               <TimeGrid days={Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(cursor), i))}
                 byDay={byDay} tagsById={tagsById} now={now}
-                onOpen={(ev) => setDialog({ kind: "detail", ev })}
+                onOpen={openEvent}
                 onPickDay={(d) => { setCursor(d); setView("day"); }} />
             )}
             {view === "day" && (
               <TimeGrid days={[startOfDay(cursor)]} byDay={byDay} tagsById={tagsById} now={now}
-                onOpen={(ev) => setDialog({ kind: "detail", ev })}
+                onOpen={openEvent}
                 onPickDay={(d) => setCursor(d)} />
             )}
           </div>

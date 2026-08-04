@@ -499,3 +499,16 @@ textarea.inp { min-height: 78px; resize: vertical; }
   .search { width: 100%; }
   .search-hits { left: 0; right: 0; width: auto; max-width: none; }
 }
+
+/* Admin-only view count, top right of the event dialog.
+   Held at 55% opacity and in the mono face so it reads as an annotation about
+   the event rather than a field of it — it is not part of the description, and
+   a logged-out reader never sees it at all. */
+.view-count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  color: var(--ink);
+  opacity: .55;
+  white-space: nowrap;
+  padding-top: 3px;   /* optically aligns with the × button beside it */
+}
