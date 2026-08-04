@@ -172,11 +172,15 @@ export default function OrgCalendar() {
 
   /* Every route into an event's detail goes through here, so a view is counted
      once per open and nowhere is missed. Fire-and-forget: the count must never
-     delay the dialog or surface an error. */
+     delay the dialog or surface an error.
+
+     Admin opens don't count. The number is meant to show what the department
+     is actually reading, and whoever maintains the calendar opens events far
+     more often than anyone else — counting those would drown the signal. */
   const openEvent = useCallback((ev) => {
     setDialog({ kind: "detail", ev });
-    api.recordView(ev.id).catch(() => {});
-  }, []);
+    if (!admin) api.recordView(ev.id).catch(() => {});
+  }, [admin]);
 
   /* Typeahead results. Drawn from the same set the calendar is showing, so
      the list and the grid can never disagree.
