@@ -512,3 +512,20 @@ textarea.inp { min-height: 78px; resize: vertical; }
   white-space: nowrap;
   padding-top: 3px;   /* optically aligns with the × button beside it */
 }
+
+/* Reorder arrows in Manage tags. Small and quiet — they sit beside every row,
+   so at full contrast they would compete with the tag names. */
+.nudge {
+  width: 20px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  color: var(--muted);
+  border-radius: 2px;
+  font-size: 7px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nudge:hover:not(:disabled) { background: var(--paper); color: var(--ink); }
+.nudge:disabled { opacity: .3; cursor: default; }

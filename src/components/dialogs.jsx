@@ -312,6 +312,19 @@ export function TagManager({ tags, counts, onClose, onSave }) {
   const [busy, setBusy] = useState(false);
   const update = (id, patch) => setList((l) => l.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
+  /* Order here is order in the sidebar: the server stores each tag's array
+     index as its position and reads back in that order, so moving a row is
+     the whole feature. Buttons rather than drag-and-drop — they work from the
+     keyboard, need no pointer precision, and there are rarely enough tags for
+     dragging to be faster. */
+  const move = (i, delta) => setList((l) => {
+    const j = i + delta;
+    if (j < 0 || j >= l.length) return l;
+    const next = [...l];
+    [next[i], next[j]] = [next[j], next[i]];
+    return next;
+  });
+
   return (
     <Scrim onClose={onClose}>
       <div className="dlg-h">
@@ -319,8 +332,14 @@ export function TagManager({ tags, counts, onClose, onSave }) {
         <button className="x" onClick={onClose} aria-label="Close">×</button>
       </div>
       <div className="dlg-b">
-        {list.map((t) => (
+        {list.map((t, i) => (
           <div key={t.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <button className="nudge" onClick={() => move(i, -1)} disabled={i === 0}
+                aria-label={`Move ${t.name} up`} title="Move up">▲</button>
+              <button className="nudge" onClick={() => move(i, 1)} disabled={i === list.length - 1}
+                aria-label={`Move ${t.name} down`} title="Move down">▼</button>
+            </span>
             <input type="color" value={t.color} aria-label="Tag colour"
               style={{ width: 34, height: 34, padding: 2, border: "1px solid var(--rule)" }}
               onChange={(e) => update(t.id, { color: e.target.value })} />
@@ -338,6 +357,7 @@ export function TagManager({ tags, counts, onClose, onSave }) {
         </button>
         <p className="note" style={{ marginBottom: 0 }}>
           Removing a tag leaves its events in place and marks them untagged.
+          The order here is the order they appear in the sidebar.
         </p>
       </div>
       <div className="dlg-f">
