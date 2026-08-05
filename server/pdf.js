@@ -9,7 +9,7 @@ import PDFDocument from "pdfkit";
 import {
   MONTHS, MON_ABBR, DAY_ABBR, DAY_LETTER, daysInMonth, startOfMonth,
   startOfWeek, startOfDay, addDays, key, sameDay, fmtTime, fmtRange,
-  fmtLongDate, periodRange, orderedDays,
+  fmtLongDate, periodRange, orderedDays, WEEK_START,
 } from "../src/lib/dates.js";
 import { expandDays } from "../src/lib/layout.js";
 import { toZoned, ZONE_LABEL } from "../src/lib/tz.js";
@@ -40,6 +40,30 @@ function ellipsis(doc, text, width) {
   let s = text;
   while (s.length > 1 && doc.widthOfString(s + "…") > width) s = s.slice(0, -1);
   return s + "…";
+}
+
+/**
+ * Trim text until it wraps into at most `maxLines`, adding an ellipsis.
+ *
+ * Bounding the height is what keeps one long title from resizing a whole
+ * week: measurement and drawing both use the clamped string, so a cell's
+ * height can never exceed what was reserved for it. Binary search rather than
+ * shrinking a character at a time — a pathological title can be thousands of
+ * characters and each measurement costs real work.
+ */
+function clampToLines(doc, text, width, maxLines) {
+  // Measure an actual rendered line rather than trusting currentLineHeight():
+  // pdfkit adds line gap on top of it, so a real line is taller than that
+  // figure and a cap built from it silently allows one line fewer.
+  const max = doc.heightOfString("Xg", { width }) * maxLines + 0.5;
+  if (doc.heightOfString(text, { width }) <= max) return text;
+  let lo = 0, hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (doc.heightOfString(text.slice(0, mid) + "\u2026", { width }) <= max) lo = mid;
+    else hi = mid - 1;
+  }
+  return text.slice(0, lo).trimEnd() + "\u2026";
 }
 
 /* ------------------------------------------------------------------ chrome */
@@ -111,8 +135,87 @@ function monthGrid(doc, { date, byDay, tagsById, top }) {
   const first = startOfWeek(startOfMonth(date));
   const colW = w / 7;
   const headH = 16;
-  const rowH = (bottom - top - headH) / 6;
   const month = date.getMonth();
+
+ /* Hard caps, so a day full of very long titles can only ever claim a bounded
+     amount of the page. Without them a single day could shrink every other
+     row to nothing — and did. */
+  const MAX_PER_DAY = 5;
+  const MAX_LINES = 2;
+
+  const FS = 6.5;              // event label size
+  const LINE = 8;              // one wrapped line of a label
+  const GAP = 1.5;             // between events
+  const TOP_PAD = 15;          // below the date number
+  const BOT_PAD = 3;
+  const textW = colW - 12;     // usable width beside the colour bar
+
+  // Only as many weeks as the month occupies, matching the on-screen grid.
+  const lead = (startOfMonth(date).getDay() - WEEK_START + 7) % 7;
+  const weeks = Math.ceil((lead + daysInMonth(date.getFullYear(), month)) / 7);
+
+  const rawLabel = (ev) =>
+    (ev.allDay ? "" : fmtTime(toZoned(ev.start)) + " ") + (ev.published ? "" : "\u25e6 ") + ev.title;
+  // Always measured and drawn from the same clamped string.
+  const label = (ev) => clampToLines(doc, rawLabel(ev), textW, MAX_LINES);
+
+  /* Pass 1: measure. heightOfString does the same wrapping the renderer will,
+     so the measurement and the drawing cannot disagree. */
+  doc.font(SANS).fontSize(FS);
+  const cellNeeds = [];
+  for (let r = 0; r < weeks; r++) {
+    for (let c = 0; c < 7; c++) {
+      const list = byDay.get(key(addDays(first, r * 7 + c))) || [];
+      const shown = list.slice(0, MAX_PER_DAY);
+      let h = TOP_PAD + BOT_PAD;
+      for (const ev of shown) h += doc.heightOfString(label(ev), { width: textW }) + GAP;
+      if (list.length > shown.length) h += LINE;   // room for the "+n more" line
+      cellNeeds[r * 7 + c] = h;
+    }
+  }
+
+  /* Pass 2: rows keep the plain uniform height unless their content genuinely
+     needs more.
+   *
+   * The obvious approach — size each row to its content, then share the
+   * leftover page space equally — inflates every row well past what it needs,
+   * so a week with four events ends up half empty. Instead the uniform height
+   * is the baseline: a row only grows when its content won't fit, and the
+   * space for that growth is taken from the rows that had room to spare.
+   */
+  const avail = bottom - top - headH;
+  const rowNeeds = [];
+  for (let r = 0; r < weeks; r++) {
+    rowNeeds[r] = Math.max(...Array.from({ length: 7 }, (_, c) => cellNeeds[r * 7 + c]));
+  }
+
+  const baseH = avail / weeks;
+  const MIN_ROW = 46;                       // still readable once shrunk
+  const rowH = rowNeeds.map((n) => Math.max(baseH, n));
+
+  // Growing some rows has to be paid for by the others, down to MIN_ROW.
+  let over = rowH.reduce((a, b) => a + b, 0) - avail;
+  if (over > 0) {
+    const donors = rowH
+      .map((h, i) => ({ i, spare: Math.max(0, h - Math.max(MIN_ROW, rowNeeds[i])) }))
+      .filter((d) => d.spare > 0);
+    const pool = donors.reduce((a, d) => a + d.spare, 0);
+    if (pool > 0) {
+      const take = Math.min(1, over / pool);
+      for (const d of donors) rowH[d.i] -= d.spare * take;
+      over -= pool * take;
+    }
+    // Still over: every row is genuinely full, so scale them all and let the
+    // per-cell "+n more" absorb what no longer fits.
+    if (over > 0.5) {
+      const total = rowH.reduce((a, b) => a + b, 0);
+      const scale = avail / total;
+      for (let i = 0; i < rowH.length; i++) rowH[i] *= scale;
+    }
+  }
+
+  const rowTop = [];
+  rowH.reduce((acc, h, i) => { rowTop[i] = acc; return acc + h; }, top + headH);
 
   doc.font(BOLD).fontSize(7.5).fillColor(MUTED);
   orderedDays.forEach((d, i) => {
@@ -121,41 +224,53 @@ function monthGrid(doc, { date, byDay, tagsById, top }) {
     });
   });
 
-  for (let r = 0; r < 6; r++) {
+  for (let r = 0; r < weeks; r++) {
     for (let c = 0; c < 7; c++) {
       const d = addDays(first, r * 7 + c);
       const x = left + c * colW;
-      const y = top + headH + r * rowH;
+      const y = rowTop[r];
+      const h = rowH[r];
       const outside = d.getMonth() !== month;
 
-      doc.rect(x, y, colW, rowH).lineWidth(0.5).strokeColor(RULE_SOFT).stroke();
-      if (outside) doc.rect(x + 0.5, y + 0.5, colW - 1, rowH - 1).fill("#FAFBFD");
+      doc.rect(x, y, colW, h).lineWidth(0.5).strokeColor(RULE_SOFT).stroke();
+      if (outside) doc.rect(x + 0.5, y + 0.5, colW - 1, h - 1).fill("#FAFBFD");
 
       doc.font(BOLD).fontSize(8).fillColor(outside ? "#B4BACD" : INK)
         .text(String(d.getDate()), x + 4, y + 4, { width: colW - 8, lineBreak: false });
 
       const list = byDay.get(key(d)) || [];
-      let ey = y + 15;
-      const lineH = 9.5;
-      for (const ev of list) {
-        if (ey + lineH > y + rowH - 2) {
-          doc.font(SANS).fontSize(6.5).fillColor(MUTED)
-            .text(`+${list.length - list.indexOf(ev)} more`, x + 4, ey, { width: colW - 8, lineBreak: false });
+      const shown = list.slice(0, MAX_PER_DAY);
+      let ey = y + TOP_PAD;
+      for (let i = 0; i < shown.length; i++) {
+        const ev = shown[i];
+        doc.font(SANS).fontSize(FS);
+        const th = doc.heightOfString(label(ev), { width: textW });
+
+        // Not enough room for this one: say how many are left rather than
+        // clipping a title mid-word.
+        if (ey + th > y + h - BOT_PAD) {
+          doc.font(SANS).fontSize(6).fillColor(MUTED)
+            .text(`+${list.length - i} more`, x + 4, ey, { width: colW - 8, lineBreak: false });
+          ey = Infinity;   // marks that the tail note is already drawn
           break;
         }
+
         const color = (tagsById[ev.tagId] || {}).color || "#9AA2BC";
-        doc.rect(x + 4, ey, 2, lineH - 2).fill(color);
-        const prefix = ev.published ? "" : "◦ ";
-        const label = (ev.allDay ? "" : fmtTime(toZoned(ev.start)) + " ") + prefix + ev.title;
-        doc.font(SANS).fontSize(6.5).fillColor(ev.published ? INK : DRAFT);
-        doc.text(ellipsis(doc, label, colW - 14), x + 9, ey + 0.5, { width: colW - 12, lineBreak: false });
-        ey += lineH;
+        doc.rect(x + 4, ey, 2, th - 1).fill(color);
+        doc.font(SANS).fontSize(FS).fillColor(ev.published ? INK : DRAFT);
+        doc.text(label(ev), x + 9, ey, { width: textW });
+        ey += th + GAP;
+      }
+
+      // Events beyond the per-day cap still get counted, so nothing vanishes
+      // silently the way it used to.
+      if (ey !== Infinity && list.length > shown.length) {
+        doc.font(SANS).fontSize(6).fillColor(MUTED)
+          .text(`+${list.length - shown.length} more`, x + 4, ey, { width: colW - 8, lineBreak: false });
       }
     }
   }
 }
-
-/* -------------------------------------------------------------- grid: week */
 
 function weekGrid(doc, { date, byDay, tagsById, top }) {
   const left = doc.page.margins.left;
