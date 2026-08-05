@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { startOfDay, toInput, toDateInput, fmtLongDate, fmtRange, slug } from "../lib/dates.js";
 import { downloadICS, googleUrl } from "../lib/ics.js";
 import { tint } from "../lib/layout.js";
+import { confusablePairs } from "../lib/cvd.js";
 import { toZoned, fromZoned, ZONE_LABEL } from "../lib/tz.js";
 
 const TAG_COLORS = [
@@ -307,6 +308,22 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
 
 /* ----------------------------------------------------------- tag manager */
 
+/* Live check as colours are edited, rather than a lint someone runs later. */
+function ColourWarning({ list }) {
+  const clashes = confusablePairs(list.filter((t) => t.name.trim()));
+  if (!clashes.length) return null;
+  return (
+    <p className="banner" style={{ marginTop: 10, marginBottom: 0 }}>
+      {clashes.slice(0, 3).map((c, i) => (
+        <span key={i} style={{ display: "block" }}>
+          <b>{c.a.name}</b> and <b>{c.b.name}</b> look alike to readers with {c.affects}.
+        </span>
+      ))}
+      {clashes.length > 3 && <span style={{ display: "block" }}>…and {clashes.length - 3} more pairs.</span>}
+    </p>
+  );
+}
+
 export function TagManager({ tags, counts, onClose, onSave }) {
   const [list, setList] = useState(tags);
   const [busy, setBusy] = useState(false);
@@ -349,6 +366,7 @@ export function TagManager({ tags, counts, onClose, onSave }) {
               onClick={() => setList((l) => l.filter((x) => x.id !== t.id))}>Remove</button>
           </div>
         ))}
+        <ColourWarning list={list} />
         <button className="btn sm" style={{ marginTop: 4 }}
           onClick={() => setList((l) => [...l, {
             id: newId(), name: "New tag", color: TAG_COLORS[l.length % TAG_COLORS.length],
