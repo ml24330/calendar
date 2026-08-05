@@ -422,6 +422,37 @@ export function AuthDialog({ claimed, onClose, onSubmit }) {
 
 /* ------------------------------------------------------------- subscribe */
 
+/* Shows the link rather than copying silently: people want to see what they
+   are about to paste, and a button that appears to do nothing is unnerving. */
+export function ShareLink({ url, shownCount, totalCount, view, onClose }) {
+  return (
+    <Scrim onClose={onClose}>
+      <div className="dlg-h">
+        <div>
+          <h2>Share this view</h2>
+        </div>
+        <button className="x" onClick={onClose} aria-label="Close">×</button>
+      </div>
+      <div className="dlg-b">
+        <p className="note" style={{ marginTop: 0 }}>
+          Opening this link shows the {view} view on the same date, with{" "}
+          {shownCount === totalCount
+            ? "all tags"
+            : `${shownCount} of ${totalCount} tags`}{" "}
+          selected. It works for anyone, signed in or not.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12 }}>
+          <code className="code" style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{url}</code>
+          <CopyButton text={url} />
+        </div>
+      </div>
+      <div className="dlg-f">
+        <button className="btn" onClick={onClose}>Close</button>
+      </div>
+    </Scrim>
+  );
+}
+
 export function SubscribeHelp({ tags, admin, onClose }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const all = `${origin}/feed.ics`;

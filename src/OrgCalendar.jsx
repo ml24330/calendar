@@ -6,11 +6,15 @@ import { expandDays, readableOn } from "./lib/layout.js";
 import { toZoned, fromZoned, zonedNow, ZONE_LABEL, ZONE_NAME, viewerIsElsewhere, CALENDAR_TZ } from "./lib/tz.js";
 import { downloadICS } from "./lib/ics.js";
 import * as api from "./lib/api.js";
+import { readParams, buildShareUrl, matchesToken } from "./lib/share.js";
 import { ORG_NAME, CUR_YEAR } from "./config.js";
 import { YearPlanner, MonthGrid, TimeGrid } from "./components/views.jsx";
 import {
-  EventDetail, EventForm, TagManager, AuthDialog, SubscribeHelp,
+  EventDetail, EventForm, TagManager, AuthDialog, SubscribeHelp, ShareLink,
 } from "./components/dialogs.jsx";
+
+/* Parsed once per page load. Nothing writes back to the URL. */
+const LINK = readParams();
 
 export default function OrgCalendar() {
   const [ready, setReady] = useState(false);
@@ -20,8 +24,8 @@ export default function OrgCalendar() {
   const [tags, setTags] = useState([]);
   const [events, setEvents] = useState([]);
 
-  const [view, setView] = useState("month");
-  const [cursor, setCursor] = useState(() => zonedNow());
+  const [view, setView] = useState(LINK.view || "month");
+  const [cursor, setCursor] = useState(() => LINK.date || zonedNow());
   const [hidden, setHidden] = useState(() => new Set());
   const [showDrafts, setShowDrafts] = useState(true);
   const [query, setQuery] = useState("");
@@ -169,6 +173,47 @@ export default function OrgCalendar() {
   }, [events]);
 
   const draftCount = useMemo(() => events.filter((e) => !e.published).length, [events]);
+
+  /* A shared link is applied whole or not at all.
+   *
+   * Partial application was worse than it sounds: a link whose date was
+   * unreadable but whose tags were fine would open on today with a filter the
+   * reader didn't choose, and no clear sense of what they were looking at.
+   * Either the link is followed exactly, or the calendar opens at its default
+   * with every tag showing and says so once.
+   *
+   * The check has to wait for the tag list, since a tag can only be known
+   * missing once the real tags have loaded. Run once, so a later refresh can't
+   * undo the reader's own filtering. */
+  const linkSettled = useRef(false);
+  useEffect(() => {
+    if (!ready || linkSettled.current) return;
+    if (LINK.tags && LINK.tags.length > 0 && tags.length === 0) return; // tags not in yet
+    linkSettled.current = true;
+
+    const all = [...tags.map((t) => t.id), "__none"];
+    const unknownTag =
+      !!LINK.tags && LINK.tags.some((tok) => !all.some((id) => matchesToken(id, tok)));
+    const broken = LINK.invalid.length > 0 || unknownTag;
+
+    if (broken) {
+      setView("month");
+      setCursor(zonedNow());
+      setHidden(new Set());
+      setNotice({
+        kind: "error",
+        text: "That link couldn't be read, so the calendar is showing its default view with every tag selected.",
+      });
+      return;
+    }
+
+    if (LINK.tags) {
+      setHidden(new Set(all.filter((id) => !LINK.tags.some((tok) => matchesToken(id, tok)))));
+    }
+  }, [ready, tags]);
+
+  const openShareDialog = () =>
+    setDialog({ kind: "share", url: buildShareUrl({ view, cursor, hidden, tags, hasUntagged: (counts.__none || 0) > 0 }) });
 
   /* Every route into an event's detail goes through here, so a view is counted
      once per open and nowhere is missed. Fire-and-forget: the count must never
@@ -422,6 +467,14 @@ export default function OrgCalendar() {
                   Manage tags
                 </button>
               )}
+              {/* Deliberately outside the admin check: sharing a filtered view
+                  is something any reader might want. It sits last so the gap
+                  above it is the same whether or not "Manage tags" is there. */}
+              <button className="btn sm wide" style={{ marginTop: 8 }}
+                onClick={openShareDialog}
+                title="Get a link that opens this view, date and tag selection">
+                Share calendar with selected tags
+              </button>
             </div>
           </section>
 
@@ -558,6 +611,15 @@ export default function OrgCalendar() {
       )}
       {dialog?.kind === "subscribe" && (
         <SubscribeHelp tags={tags} admin={admin} onClose={() => setDialog(null)} />
+      )}
+      {dialog?.kind === "share" && (
+        <ShareLink
+          url={dialog.url}
+          view={view}
+          shownCount={tags.filter((t) => !hidden.has(t.id)).length}
+          totalCount={tags.length}
+          onClose={() => setDialog(null)}
+        />
       )}
     </>
   );
