@@ -529,3 +529,40 @@ textarea.inp { min-height: 78px; resize: vertical; }
 }
 .nudge:hover:not(:disabled) { background: var(--paper); color: var(--ink); }
 .nudge:disabled { opacity: .3; cursor: default; }
+
+/* Tag row plus its "list every event" button. The row itself stays the wide
+   click target for filtering; the magnifier is a separate, quieter control so
+   the two actions can't be confused for one another. */
+.tag-line { display: flex; align-items: center; }
+.tag-line .tag-row { flex: 1; min-width: 0; }
+.tag-browse {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  border-radius: 3px;
+  /* Faint at rest rather than hidden: a control nobody can see is a control
+     nobody uses, and hover-only reveals leave touch users with nothing. */
+  opacity: .45;
+  cursor: pointer;
+}
+.tag-line:hover .tag-browse,
+.tag-browse:focus-visible { opacity: 1; }
+.tag-browse:hover { background: var(--paper); color: var(--ink); }
+
+/* Long result lists scroll rather than being cut off at a fixed count. */
+.search-hits { max-height: 46vh; overflow-y: auto; }
+.hits-count {
+  padding: 5px 9px 6px;
+  font-size: 10.5px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--rule-soft);
+  margin-bottom: 2px;
+  position: sticky;
+  top: -4px;
+  background: var(--card);
+}

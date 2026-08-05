@@ -140,16 +140,36 @@ export default function OrgCalendar() {
 
   const tagsById = useMemo(() => Object.fromEntries(tags.map((t) => [t.id, t])), [tags]);
 
+  /* A query beginning with ":" selects a whole tag — ":Happy Hours" — rather
+     than searching text. Matched against the tag's name and its id, so the
+     sidebar buttons can use the name people actually recognise. */
+  const tagQuery = useMemo(() => {
+    const q = query.trim();
+    if (!q.startsWith(":")) return null;
+    const want = q.slice(1).trim().toLowerCase();
+    if (!want) return null;
+    if (want === "untagged" || want === "none") return "__none";
+    /* Exact match only. Prefix matching would make a tag whose name is a
+       prefix of another — "ABC" alongside "ABCD" — impossible to select on its
+       own, and silently picking whichever came first was worse still. A
+       partial name simply matches nothing until it is complete. */
+    const hit = tags.find(
+      (t) => t.name.toLowerCase() === want || t.id.toLowerCase() === want
+    );
+    return hit ? hit.id : "__nomatch";
+  }, [query, tags]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return events.filter((ev) => {
       if (!ev.published && !showDrafts) return false;
       if (hidden.has(ev.tagId || "__none")) return false;
+      if (tagQuery) return (ev.tagId || "__none") === tagQuery;
       if (!q) return true;
       return [ev.title, ev.location, ev.details, ev.contactName, ev.contactEmail]
         .filter(Boolean).join(" ").toLowerCase().includes(q);
     });
-  }, [events, hidden, query, showDrafts]);
+  }, [events, hidden, query, showDrafts, tagQuery]);
 
   const byDay = useMemo(() => {
     const map = new Map();
@@ -229,6 +249,9 @@ export default function OrgCalendar() {
 
   /* Typeahead results. Drawn from the same set the calendar is showing, so
      the list and the grid can never disagree.
+     Every match is listed and the panel scrolls, rather than silently cutting
+     off at an arbitrary count — with a tag query especially, "show me all of
+     them" is the whole point.
      Ordered by distance from today in either direction: what you are looking
      for is usually near now, and whether it is just behind or just ahead is
      not something the search box can know. Measured in whole days, so an
@@ -249,8 +272,7 @@ export default function OrgCalendar() {
         b.day - a.day ||     // a tie is one ahead and one behind: prefer ahead
         a.at - b.at          // same day: earlier in the day first
       )
-      .slice(0, 6)
-      .map((x) => x.ev);
+      .map((x) => x.ev);   // no cap: the list scrolls
   }, [visible, query]);
 
   useEffect(() => { setSearchIndex(0); }, [query]);
@@ -262,6 +284,29 @@ export default function OrgCalendar() {
     setCursor(toZoned(ev.start));
     openEvent(ev);
     setSearchOpen(false);
+  };
+
+  const searchRef = useRef(null);
+  /* The close-on-blur timer, held so it can be cancelled. Clicking a control
+     that reopens the list blurs the input first, arming this; without a handle
+     on it the list would reopen and then be shut again 120ms later. */
+  const blurTimer = useRef(null);
+  const hitsRef = useRef(null);
+  useEffect(() => {
+    const el = hitsRef.current?.children[searchIndex];
+    if (el) el.scrollIntoView({ block: "nearest" });
+  }, [searchIndex]);
+
+  /* Browse a whole tag: fill the box with the tag query and open the list.
+     Un-hides the tag first — asking to see a tag's events and getting nothing
+     because it happens to be filtered out would be its own small puzzle. */
+  const browseTag = (t) => {
+    clearTimeout(blurTimer.current);   // this click may have just blurred the box
+    setHidden((h) => { const n = new Set(h); n.delete(t.id); return n; });
+    setQuery(`:${t.name}`);
+    setSearchIndex(0);
+    setSearchOpen(true);
+    searchRef.current?.focus();
   };
 
   const onSearchKey = (e) => {
@@ -366,20 +411,26 @@ export default function OrgCalendar() {
         </div>
         <div className="search-wrap">
           <input
+            ref={searchRef}
             className="search mono"
             placeholder="Search events"
             value={query}
             onChange={(e) => { setQuery(e.target.value); setSearchOpen(true); }}
-            onFocus={() => setSearchOpen(true)}
+            onFocus={() => { clearTimeout(blurTimer.current); setSearchOpen(true); }}
             /* Let a click on a result land before the list disappears. */
-            onBlur={() => setTimeout(() => setSearchOpen(false), 120)}
+            onBlur={() => { blurTimer.current = setTimeout(() => setSearchOpen(false), 120); }}
             onKeyDown={onSearchKey}
             aria-label="Search events"
             aria-expanded={searchOpen && searchHits.length > 0}
             aria-autocomplete="list"
           />
           {searchOpen && searchHits.length > 0 && (
-            <ul className="search-hits" role="listbox">
+            <ul className="search-hits" role="listbox" ref={hitsRef}>
+              {searchHits.length > 6 && (
+                <li className="hits-count" aria-hidden="true">
+                  {searchHits.length} matches — scroll for more
+                </li>
+              )}
               {searchHits.map((ev, i) => {
                 const d = toZoned(ev.start);
                 const tag = tagsById[ev.tagId];
@@ -443,13 +494,25 @@ export default function OrgCalendar() {
               {tags.map((t) => {
                 const off = hidden.has(t.id);
                 return (
-                  <button key={t.id} className={"tag-row" + (off ? " off" : "")}
-                    onClick={() => toggleFilter(t.id)} aria-pressed={!off}
-                    title={off ? `Show ${t.name}` : `Hide ${t.name}`}>
-                    <TagCheck color={t.color} on={!off} />
-                    <span className="n">{t.name}</span>
-                    <span className="count">{counts[t.id] || 0}</span>
-                  </button>
+                  <div key={t.id} className="tag-line">
+                    <button className={"tag-row" + (off ? " off" : "")}
+                      onClick={() => toggleFilter(t.id)} aria-pressed={!off}
+                      title={off ? `Show ${t.name}` : `Hide ${t.name}`}>
+                      <TagCheck color={t.color} on={!off} />
+                      <span className="n">{t.name}</span>
+                      <span className="count">{counts[t.id] || 0}</span>
+                    </button>
+                    <button className="tag-browse"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => browseTag(t)}
+                      title={`List every ${t.name} event`}
+                      aria-label={`List every ${t.name} event`}>
+                      <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+                        <circle cx="7" cy="7" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+                        <line x1="10.2" y1="10.2" x2="14" y2="14" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                      </svg>
+                    </button>
+                  </div>
                 );
               })}
               {counts.__none > 0 && (
