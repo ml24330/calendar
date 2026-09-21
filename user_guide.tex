@@ -116,6 +116,9 @@ Once logged in you can:
   \item \textbf{Add event} — the button at the top of the sidebar.
   \item \textbf{Edit} or \textbf{Remove} — open any event and use the buttons
         at the bottom. Removing asks for confirmation.
+  \item \textbf{Duplicate} — opens a new event with every field copied from
+        the one you are looking at. Change the date and time and save; the
+        original is left as it was. Handy for events that repeat.
   \item \textbf{Manage tags} — rename them, change colours, add new ones or
         remove them. Removing a tag does not delete its events; they simply
         become untagged.
@@ -133,13 +136,14 @@ own calendars, so attendees know who to ask.
 Tick \textbf{All-day event} for something without a specific time, such as a
 deadline or a multi-day visit.
 
-\subsection{Drafts}
+\subsection{Published and unpublished events}
 
 The event form has two save buttons. \textbf{Add and publish} makes the event
-visible to everyone. \textbf{Save as draft} keeps it visible only to people
+visible to everyone. \textbf{Add as unpublished} keeps it visible only to people
 logged in to edit — it stays out of the feed, the downloads and the PDF.
 
-Use a draft when a date or venue is not confirmed. Drafts appear hatched and
+Leave an event unpublished when a date or venue is not confirmed. Unpublished
+events appear hatched and
 labelled in the calendar so they are hard to confuse with real events. Publish
 one later by opening it and clicking \textbf{Publish}.
 
@@ -277,7 +281,7 @@ The events live in one hosted database. To take a copy:
 
 Worth doing once a term, and before any handover. A rougher second copy is
 available by logging in and downloading the \code{.ics} file, which contains
-every event including drafts in a format any calendar can read.
+every event including unpublished ones in a format any calendar can read.
 
 \section{Known limits}
 
@@ -286,7 +290,7 @@ every event including drafts in a format any calendar can read.
         separate events.
   \item \textbf{One shared passphrase.} Everyone who can edit uses the same one,
         and the calendar does not record who changed what. Share it narrowly.
-  \item \textbf{A feed link containing a token shows drafts.} Calendar apps
+  \item \textbf{A feed link containing a token shows unpublished events.} Calendar apps
         store such links in plain text, so treat one as a password rather than
         something to paste into a group chat.
 \end{itemize}

@@ -46,12 +46,12 @@ function CopyButton({ text }) {
 }
 
 export function DraftBadge() {
-  return <span className="pill draft-pill">Draft · not visible to readers</span>;
+  return <span className="pill draft-pill">Unpublished · not visible to readers</span>;
 }
 
 /* ---------------------------------------------------------- event detail */
 
-export function EventDetail({ ev, tag, admin, onClose, onEdit, onDelete, onTogglePublished }) {
+export function EventDetail({ ev, tag, admin, onClose, onEdit, onDuplicate, onDelete, onTogglePublished }) {
   const [confirming, setConfirming] = useState(false);
   const c = (tag && tag.color) || "#9AA2BC";
 
@@ -129,6 +129,10 @@ export function EventDetail({ ev, tag, admin, onClose, onEdit, onDelete, onToggl
 
         {admin && (
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <button className="btn" onClick={onDuplicate}
+              title="Start a new event with everything filled in from this one">
+              Duplicate
+            </button>
             <button className="btn" onClick={onTogglePublished}>
               {ev.published ? "Unpublish" : "Publish"}
             </button>
@@ -145,9 +149,17 @@ export function EventDetail({ ev, tag, admin, onClose, onEdit, onDelete, onToggl
 
 /* ------------------------------------------------------------ event form */
 
-export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
+export function EventForm({ ev, template, tags, defaultDate, onClose, onSave }) {
+  /* `ev` edits an existing event. `template` pre-fills a NEW one from an
+     existing event — used by Duplicate. Keeping them separate means everything
+     keyed on `ev` (the id and version sent on save, the button labels) stays
+     in "add" mode, so saving a copy can never overwrite the original. */
   const base = useMemo(() => {
     if (ev) return ev;
+    if (template) {
+      const { id, version, views, updatedAt, ...fields } = template;
+      return fields;
+    }
     const d = startOfDay(defaultDate);
     return {
       title: "",
@@ -158,7 +170,7 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
       published: true,
       location: "", contactName: "", contactEmail: "", details: "", link: "",
     };
-  }, [ev, defaultDate, tags]);
+  }, [ev, template, defaultDate, tags]);
 
   const [f, setF] = useState(() => ({
     ...base,
@@ -212,8 +224,15 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
   return (
     <Scrim onClose={onClose} wide>
       <div className="dlg-h">
-        <h2>{ev ? "Edit event" : "Add event"}</h2>
-        <button className="x" onClick={onClose} aria-label="Close">×</button>
+        <div>
+          <h2>{ev ? "Edit event" : "Add event"}</h2>
+          {template && (
+            <p className="note" style={{ margin: "4px 0 0" }}>
+              Copied from “{template.title}”. Change the date and time, then save.
+            </p>
+          )}
+        </div>
+        <button className="x" onClick={onClose} aria-label="Close" style={{ marginLeft: "auto" }}>×</button>
       </div>
 
       <div className="dlg-b">
@@ -294,11 +313,11 @@ export function EventForm({ ev, tags, defaultDate, onClose, onSave }) {
           {ev ? (f.published ? "Save changes" : "Save and publish") : "Add and publish"}
         </button>
         <button className="btn" disabled={busy} onClick={() => submit(false)}>
-          {ev && !f.published ? "Save draft" : "Save as draft"}
+          {!ev ? "Add as unpublished" : f.published ? "Save and unpublish" : "Save, keep unpublished"}
         </button>
         <button className="btn" onClick={onClose} style={{ marginLeft: "auto" }}>Cancel</button>
         <p className="note" style={{ width: "100%", margin: "6px 0 0" }}>
-          A draft is visible only to people logged in to edit. It stays out of the calendar
+          An unpublished event is visible only to people logged in to edit. It stays out of the calendar
           feed, the .ics downloads and the PDF until you publish it.
         </p>
       </div>
@@ -528,7 +547,7 @@ export function SubscribeHelp({ tags, admin, onClose }) {
 
         {admin && (
           <p className="banner" style={{ marginTop: 16 }}>
-            Adding <span className="mono">?token=…</span> to a feed URL includes your drafts.
+            Adding <span className="mono">?token=…</span> to a feed URL includes your unpublished events.
             Anyone holding that URL sees them, and calendar apps store it in plain text — so
             treat it as a password, not a link to paste in chat.
           </p>

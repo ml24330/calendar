@@ -236,7 +236,7 @@ export async function handle(req, res, next) {
         events = events.filter((e) => e.tagId === tag.id);
         name = `${name} — ${tag.name}`;
       }
-      if (admin) name += " (incl. drafts)";
+      if (admin) name += " (incl. unpublished)";
 
       const tagsById = Object.fromEntries(tags.map((t) => [t.id, t]));
       res.statusCode = 200;

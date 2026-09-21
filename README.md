@@ -21,8 +21,8 @@ of contact with an email, free-text details and an optional link.
 it; everything else — the counts, the exports, the year legend — follows the
 filter.
 
-**Drafts.** An event can be saved unpublished. Drafts are visible only to
-people who have logged in to edit, and stay out of the feed, the downloads and
+**Unpublished events.** An event can be saved unpublished. Unpublished events
+are visible only to people who have logged in to edit, and stay out of the feed, the downloads and
 the PDF for everyone else. Useful when a date isn't confirmed yet.
 
 **Export and subscribe.**
@@ -49,7 +49,7 @@ npm run dev
 ```
 
 Open <http://localhost:5173>. The first run creates a local `calendar.db` with
-a couple of weeks of sample events, including two drafts. Delete that file to
+a couple of weeks of sample events, including two unpublished ones. Delete that file to
 start over. The first person to open an unclaimed calendar sets the editing
 passphrase.
 
@@ -113,7 +113,7 @@ server/
 
 | Route | Auth | Does |
 | --- | --- | --- |
-| `GET /api/bootstrap` | optional | tags and events. Drafts only with a session |
+| `GET /api/bootstrap` | optional | tags and events. Unpublished events only with a session |
 | `POST /api/session` | — | claims the calendar on first run, otherwise logs in |
 | `DELETE /api/session` | token | logs out, revoking the token |
 | `POST /api/events` | required | create |
@@ -126,7 +126,7 @@ server/
 
 ## How it works
 
-**Drafts are enforced on the server.** Unpublished events are filtered out of
+**Publishing is enforced on the server.** Unpublished events are filtered out of
 the query for anyone without a valid session, so they never reach an anonymous
 client at all — not in the page, not in the feed, not in the PDF.
 
@@ -163,7 +163,7 @@ transitions.
 - No recurring events. A weekly seminar is entered as separate events.
 - One shared editing passphrase and one role, with no record of who changed
   what.
-- A feed URL carrying a token includes drafts, so treat it as a password.
+- A feed URL carrying a token includes unpublished events, so treat it as a password.
 
 Deployment and day-to-day operation are covered in the user guide kept
 alongside this repository.

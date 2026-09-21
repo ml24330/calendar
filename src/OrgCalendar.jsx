@@ -108,8 +108,8 @@ export default function OrgCalendar() {
     const ok = await run(
       () => (ev.id ? api.updateEvent(ev.id, ev) : api.createEvent(ev)),
       ev.id
-        ? (ev.published ? "Saved." : "Saved as a draft.")
-        : (ev.published ? "Event added." : "Draft added — readers can't see it yet.")
+        ? (ev.published ? "Saved." : "Saved as unpublished.")
+        : (ev.published ? "Event added." : "Added as unpublished — readers can't see it yet.")
     );
     if (ok) setDialog(null);
   };
@@ -127,7 +127,7 @@ export default function OrgCalendar() {
     await api.login(passphrase);
     await refresh();
     setDialog(null);
-    setNotice({ kind: "ok", text: "Logged in. Drafts are visible to you now." });
+    setNotice({ kind: "ok", text: "Logged in. Unpublished events are visible to you now." });
   };
 
   const lock = async () => {
@@ -448,7 +448,7 @@ export default function OrgCalendar() {
                         {MON_ABBR[d.getMonth()]} {d.getDate()} {d.getFullYear()}
                       </span>
                       <span className="hit-title">
-                        {!ev.published && <span className="hit-draft">draft</span>}
+                        {!ev.published && <span className="hit-draft">unpublished</span>}
                         {ev.title}
                       </span>
                       {tag && <span className="swatch" style={{ background: tag.color }} />}
@@ -543,7 +543,7 @@ export default function OrgCalendar() {
 
           {admin && (
             <section className="panel">
-              <div className="panel-h"><span className="eyebrow">Drafts</span></div>
+              <div className="panel-h"><span className="eyebrow">Unpublished</span></div>
               <div className="panel-b">
                 <label className="check" style={{ marginBottom: 8 }}>
                   <input type="checkbox" checked={showDrafts}
@@ -658,11 +658,12 @@ export default function OrgCalendar() {
         <EventDetail ev={dialog.ev} tag={tagsById[dialog.ev.tagId]} admin={admin}
           onClose={() => setDialog(null)}
           onEdit={() => setDialog({ kind: "form", ev: dialog.ev })}
+          onDuplicate={() => setDialog({ kind: "form", template: dialog.ev })}
           onDelete={() => removeEvent(dialog.ev.id)}
           onTogglePublished={() => saveEvent({ ...dialog.ev, published: !dialog.ev.published })} />
       )}
       {dialog?.kind === "form" && (
-        <EventForm ev={dialog.ev} tags={tags} defaultDate={cursor}
+        <EventForm ev={dialog.ev} template={dialog.template} tags={tags} defaultDate={cursor}
           onClose={() => setDialog(null)} onSave={saveEvent} />
       )}
       {dialog?.kind === "tags" && (

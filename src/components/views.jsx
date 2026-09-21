@@ -132,7 +132,7 @@ export function MonthGrid({ cursor, byDay, tagsById, onOpen, onPickDay }) {
                     className={"chip" + (ev.published ? "" : " draft")}
                     style={{ borderLeftColor: c, background: tint(c, ev.published ? 0.07 : 0.03) }}
                     onClick={() => onOpen(ev)}
-                    title={ev.published ? ev.title : `Draft — ${ev.title}`}
+                    title={ev.published ? ev.title : `Unpublished — ${ev.title}`}
                   >
                     {!ev.allDay && <span className="h">{fmtTime(toZoned(ev.start))}</span>}
                     <span className="t">{ev.title}</span>
@@ -272,7 +272,7 @@ export function TimeGrid({ days, byDay, tagsById, onOpen, now, onPickDay }) {
                       }}
                       onClick={() => onOpen(ev)}
                     >
-                      <div className="t">{ev.published ? ev.title : `Draft · ${ev.title}`}</div>
+                      <div className="t">{ev.published ? ev.title : `Unpublished · ${ev.title}`}</div>
                       {h > 34 && <div className="s">{fmtRange(ev)}</div>}
                       {h > 58 && ev.location && <div className="s">{ev.location}</div>}
                     </button>

@@ -80,7 +80,7 @@ function header(doc, { orgName, label, view, tags, includeDrafts, filtered }) {
   const meta = [
     view[0].toUpperCase() + view.slice(1) + " view",
     filtered ? "filtered" : "all tags",
-    includeDrafts ? "includes drafts" : "published only",
+    includeDrafts ? "includes unpublished" : "published only",
     "times in " + ZONE_LABEL,
     "generated " + new Date().toLocaleDateString(undefined, {
       year: "numeric", month: "short", day: "numeric",
@@ -295,7 +295,7 @@ function weekGrid(doc, { date, byDay, tagsById, top }) {
       doc.font(SANS).fontSize(6.5).fillColor(MUTED)
         .text(ev.allDay ? "All day" : fmtTime(toZoned(ev.start)), x + 10, y, { width: colW - 14, lineBreak: false });
       doc.font(BOLD).fontSize(7).fillColor(ev.published ? INK : DRAFT);
-      const title = (ev.published ? "" : "DRAFT · ") + ev.title;
+      const title = (ev.published ? "" : "UNPUBLISHED · ") + ev.title;
       doc.text(ellipsis(doc, title, colW - 16), x + 10, y + 8, { width: colW - 14, lineBreak: false });
       if (ev.location) {
         doc.font(SANS).fontSize(6).fillColor(MUTED)
@@ -401,7 +401,7 @@ function agenda(doc, { events, tagsById, includeDrafts }) {
     doc.rect(left, y0 + 1, 3, 30).fill(ev.published ? color : tintHex(color, 0.4));
 
     doc.font(BOLD).fontSize(9.5).fillColor(ev.published ? INK : DRAFT);
-    doc.text((ev.published ? "" : "DRAFT — ") + ev.title, left + 10, y0, { width: w - 130 });
+    doc.text((ev.published ? "" : "UNPUBLISHED — ") + ev.title, left + 10, y0, { width: w - 130 });
 
     doc.font(SANS).fontSize(7.5).fillColor(MUTED);
     doc.text(fmtRange(ev) + (tag ? `   ·   ${tag.name}` : ""), left + 10, doc.y + 1, { width: w - 130 });
@@ -425,7 +425,7 @@ function agenda(doc, { events, tagsById, includeDrafts }) {
   if (includeDrafts) {
     doc.y += 8;
     doc.font(SANS).fontSize(7).fillColor(DRAFT)
-      .text("Entries marked DRAFT are unpublished and are not visible to readers of the calendar.", left, doc.y, { width: w });
+      .text("Entries marked UNPUBLISHED are not visible to readers of the calendar.", left, doc.y, { width: w });
   }
 }
 

@@ -394,9 +394,9 @@ async function seed() {
       "Department office", "econ-office@stanford.edu", "Agenda circulated the week before."],
     /* Two drafts, so there's something to see once you log in to edit. */
     ["Reorg announcement (date not fixed)", "t1", at(6, 10), at(6, 11), 0, 0, "Auditorium",
-      "Department office", "econ-office@stanford.edu", "Draft — do not circulate until the date is confirmed."],
+      "Department office", "econ-office@stanford.edu", "Not yet published — do not circulate until the date is confirmed."],
     ["Holiday party — venue TBC", "t3", at(30, 18), at(30, 22), 0, 0, "TBC",
-      "Social committee", "econ-social@stanford.edu", "Draft — waiting on a quote from the venue."],
+      "Social committee", "econ-social@stanford.edu", "Not yet published — waiting on a quote from the venue."],
   ];
 
   for (const [title, tagId, start, end, allDay, published, location, cn, ce, details] of rows) {
